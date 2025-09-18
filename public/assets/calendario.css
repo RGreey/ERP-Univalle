@@ -1,0 +1,149 @@
+@import url('https://fonts.googleapis.com/css?family=Exo:400,700');
+
+body {
+    background: #ddd;
+}
+
+
+
+
+/* Estilo general del calendario */
+#calendar {
+    max-width: 1000px;
+    margin: 40px auto;
+    background-color: #ffffff;
+    border-radius: 15px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); 
+}
+
+/* Estilo del encabezado del calendario */
+.fc-header-toolbar {
+    background-color: #cd1f32; 
+    color: #ffffff; 
+    border-radius: 10px 10px 0 0;
+    font-size: 18px; 
+}
+
+/* Estilo de los botones de cambio de vista */
+.fc-button {
+    background-color: #cd1f32; 
+    color: #ffffff;
+    border: none;
+    border-radius: 5px;
+}
+
+/* Estilo del texto del botón de cambio de vista */
+.fc-button:hover {
+    background-color: #b31727;
+}
+
+/* Estilo de los eventos */
+.fc-event {
+    background-color: #b93141; 
+    border: none;
+    color: #ffffff; 
+    border-radius: 5px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* Estilo del texto del evento */
+.fc-event-title {
+    font-weight: bold;
+}
+
+/* Estilo del borde del evento al pasar el ratón */
+.fc-event:hover {
+    border: 1px solid #cd1f32; 
+}
+
+.fc-button-primary {
+    background-color: #cd1f32 !important;
+    color: #c2c0c0 !important;
+    border: none !important;
+}
+
+/* Estilo del número de día */
+.fc-daygrid-day-number {
+    color: #000000; 
+    font-weight: bold;
+}
+
+/* Estilos para dispositivos móviles */
+@media screen and (max-width: 968px) {
+    #calendar {
+        max-width: 95%;
+    }
+
+    .fc-header-toolbar {
+        font-size: 16px;
+    }
+}
+
+
+@media screen and (max-width: 576px) {
+    #calendar {
+        max-width: 90%;
+    }
+
+    .fc-header-toolbar {
+        font-size: 14px;
+    }
+}
+
+/* Estilos para laptops */
+@media screen and (min-width: 768px) {
+    #calendar {
+        max-width: 70%;
+    }
+
+    .fc-header-toolbar {
+        font-size: 16px;
+    }
+}
+
+.navbar-custom {
+    background-color: #cd1f32 ; 
+}
+
+.navbar-nav .nav-link:hover {
+    color: #fff; 
+    background-color: #be4c4c; 
+    border-radius: 0px;
+    border-bottom-left-radius: 3px; 
+    transition: all 0.3s ease; 
+}
+
+.dropdown-toggle {
+    background-color: #cd1f32 !important;
+    color: #ffffff !important;
+    border: none !important; 
+}
+
+.dropdown-toggle:hover {
+    background-color: #ffffff !important;
+    color: #cd1f32 !important;
+}
+
+.dropdown-menu a:hover {
+    background-color: #cd1f32 !important;
+    color: #ffffff !important;
+}
+
+.custom-button {
+    background-color: #cd1f32 !important;
+    color: #ffffff !important;
+    border: none !important;
+    border-radius: 0.25rem; 
+    padding: 0.375rem 0.75rem; 
+    margin: 0; 
+    font-weight: 400; 
+    font-style: normal; 
+    text-decoration: none; 
+    cursor: pointer; 
+}
+
+/* Estilos al pasar el mouse por encima del botón */
+.custom-button:hover {
+    background-color: #ffff !important;
+    color: #cd1f32 !important;
+}
