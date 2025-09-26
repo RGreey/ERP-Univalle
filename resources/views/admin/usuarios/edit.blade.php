@@ -23,6 +23,8 @@
                 <option value="Administrativo" {{ $usuario->rol == 'Administrativo' ? 'selected' : '' }}>Administrativo</option>
                 <option value="CooAdmin" {{ $usuario->rol == 'CooAdmin' ? 'selected' : '' }}>CooAdmin</option>
                 <option value="AuxAdmin" {{ $usuario->rol == 'AuxAdmin' ? 'selected' : '' }}>AuxAdmin</option>
+                <option value="AdminBienestar" {{ $usuario->rol == 'AdminBienestar' ? 'selected' : '' }}>AdminBienestar</option>
+                <option value="Restaurante" {{ $usuario->rol == 'Restaurante' ? 'selected' : '' }}>Restaurante</option>
             </select>
             @error('rol')<div class="text-danger small">{{ $message }}</div>@enderror
         </div>
