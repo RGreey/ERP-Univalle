@@ -104,6 +104,8 @@ class LoginController extends Controller
             case 'AuxAdmin':
                 return redirect()->route('administrativo.dashboard');
                 break;
+            case 'AdminBienestar':
+                return redirect()->route('subsidio.admin.dashboard');
             default:
                 return redirect('/'); 
                 break;

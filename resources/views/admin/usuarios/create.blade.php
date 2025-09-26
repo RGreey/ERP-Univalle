@@ -23,6 +23,8 @@
                 <option value="Administrativo">Administrativo</option>
                 <option value="CooAdmin">CooAdmin</option>
                 <option value="AuxAdmin">AuxAdmin</option>
+                <option value="AdminBienestar">AdminBienestar</option>
+                <option value="Restaurante">Restaurante</option>
             </select>
             @error('rol')<div class="text-danger small">{{ $message }}</div>@enderror
         </div>

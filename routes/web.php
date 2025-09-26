@@ -11,6 +11,7 @@ use App\Http\Controllers\MonitoriaController;
 use App\Http\Controllers\PostuladoController;
 use App\Http\Controllers\MonitorController;
 use App\Http\Controllers\NovedadController;
+use App\Http\Controllers\SubsidioAlimenticioController;
 use Illuminate\Foundation\Auth\EmailVerificationRequest;
 use Illuminate\Http\Request;
 
@@ -600,8 +601,27 @@ Route::get('/probar-convocatoria-html', function () {
 })->name('probar.convocatoria.html');
 
 
+//Ruta para el AdminBienestar
+Route::middleware(['auth', 'checkrole:AdminBienestar'])->group(function () {
+    Route::get('/subsidio/admin', [SubsidioAlimenticioController::class, 'dashboard'])->name('subsidio.admin.dashboard');
 
+    // Define las rutas que el menú necesita
+    Route::get('/admin/estudiantes', function() {
+        return view('roles.adminbienestar.estudiantes'); // Puedes crear esta vista temporal
+    })->name('admin.estudiantes');
 
+    Route::get('/admin/convocatorias', function() {
+        return view('roles.adminbienestar.convocatorias');
+    })->name('admin.convocatorias');
+
+    Route::get('/admin/reportes', function() {
+        return view('roles.adminbienestar.reportes');
+    })->name('admin.reportes');
+
+    Route::get('/admin/configuracion', function() {
+        return view('roles.adminbienestar.configuracion');
+    })->name('admin.configuracion');
+});
 
 
 

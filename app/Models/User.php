@@ -85,7 +85,7 @@ class User extends Authenticatable implements MustVerifyEmail
         if (is_array($roles)) {
             // Verificamos si el usuario tiene al menos uno de los roles permitidos
             foreach ($roles as $role) {
-                if ($role === 'Profesor' || $role === 'Administrativo' || $role === 'Estudiante' || $role === 'CooAdmin' || $roles === 'AuxAdmin') {
+                if ($role === 'Profesor' || $role === 'Administrativo' || $role === 'Estudiante' || $role === 'CooAdmin' || $roles === 'AuxAdmin' || $roles === 'AdminBienestar') {
                     if ($this->rol === $role) {
                         return true;
                     }
@@ -95,7 +95,7 @@ class User extends Authenticatable implements MustVerifyEmail
         } 
         // Si $roles no es un arreglo, verificamos si el usuario tiene el único rol permitido
         else {
-            return $this->rol === $roles && ($roles === 'Profesor' || $roles === 'Administrativo' || $roles === 'Estudiante' || $roles === 'CooAdmin' || $roles === 'AuxAdmin');
+            return $this->rol === $roles && ($roles === 'Profesor' || $roles === 'Administrativo' || $roles === 'Estudiante' || $roles === 'CooAdmin' || $roles === 'AuxAdmin' || $roles === 'AdminBienestar');
         }
     }
 }

@@ -52,7 +52,7 @@ class AdminUsuarioController extends Controller
         $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email',
-            'rol' => 'required|in:Estudiante,Profesor,Administrativo,CooAdmin,AuxAdmin',
+            'rol' => 'required|in:Estudiante,Profesor,Administrativo,CooAdmin,AuxAdmin,AdminBienestar,Restaurante',
             'password' => 'required|string|min:8|confirmed',
         ]);
         User::create([
@@ -78,7 +78,7 @@ class AdminUsuarioController extends Controller
         $usuario = User::findOrFail($id);
         $request->validate([
             'name' => 'required|string|max:255',
-            'rol' => 'required|in:Estudiante,Profesor,Administrativo,CooAdmin,AuxAdmin',
+            'rol' => 'required|in:Estudiante,Profesor,Administrativo,CooAdmin,AuxAdmin,AdminBienestar,Restaurante',
         ]);
         $usuario->update([
             'name' => $request->name,
