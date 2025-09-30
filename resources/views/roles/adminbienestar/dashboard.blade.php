@@ -123,7 +123,7 @@
 
 <div class="dashboard-shell" id="dashShell">
     <aside class="dash-sidebar">
-        <h2>Admin Panel</h2>
+        <h2>Panel Admistrativo</h2>
         <ul class="dash-menu">
             <li class="active"><a href="#">Inicio</a></li>
             <li><a href="{{ route('admin.estudiantes') }}">Gestión Estudiantes</a></li>

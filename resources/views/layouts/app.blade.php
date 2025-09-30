@@ -23,16 +23,19 @@
     <!-- Navbar -->
     <nav class="navbar navbar-expand-lg navbar-light navbar-custom">
         <div class="container-fluid">
-            <a class="navbar-brand text-white" href="#">
+            <a class="navbar-brand text-white" href="{{ $esBienestar ? route('subsidio.admin.dashboard') : '#' }}">
                 <img src="{{ asset('imagenes/header_logo.jpg') }}" alt="Logo de la universidad" style="max-height: 50px;">
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
+                @if ($esBienestar)
+                <a href="{{ route('subsidio.admin.dashboard') }}" class="btn btn-light custom-button" style="background-color: #ffffff; color: #000000; margin-right: 10px;">Módulo Bienestar</a>
+                @endif
                 @unless ($esBienestar)
                 <a href="{{ route('dashboard') }}" class="btn btn-light custom-button" style="background-color: #ffffff; color: #000000; margin-right: 10px;">Inicio</a>
-                @endunless
+                
                 @if(auth()->user()->hasRole('CooAdmin') || auth()->user()->hasRole('AuxAdmin') || auth()->user()->hasRole('Administrativo') || auth()->user()->hasRole('Profesor'))
                 <div class="dropdown">
                     <button class="btn btn-light dropdown-toggle" type="button" id="dropdownEventos" data-bs-toggle="dropdown" aria-expanded="false" style="background-color: #ffffff; color: #000000;">
@@ -46,13 +49,13 @@
                     </ul>
                 </div>
                 @endif
-
-                <div class="dropdown">
+                @endunless
+                <div class="dropdown @if($esBienestar) d-none @endif">
                     @unless ($esBienestar)
                     <button class="btn btn-light dropdown-toggle" type="button" id="dropdownMonitoria" data-bs-toggle="dropdown" aria-expanded="false" style="background-color: #ffffff; color: #000000;">
                         Monitorias
                     </button>
-                    @endunless
+                
                     <ul class="dropdown-menu" aria-labelledby="dropdownMonitoria" style="background-color: #ffffff;">
                         @if(auth()->user()->hasRole('CooAdmin')|| auth()->user()->hasRole('AuxAdmin'))
                             <li><a class="dropdown-item" href="{{ route('periodos.crear') }}" style="color: #000000;">Consultar Periodo Academico</a></li>
@@ -130,7 +133,9 @@
                                 @endif
                             @endforeach
                         @endif
+                        
                     </ul>
+                    @endunless
                 </div>
                 
                 @if(auth()->user()->hasRole('CooAdmin') || auth()->user()->hasRole('AuxAdmin') || auth()->user()->hasRole('Profesor') || auth()->user()->hasRole('Administrativo'))
