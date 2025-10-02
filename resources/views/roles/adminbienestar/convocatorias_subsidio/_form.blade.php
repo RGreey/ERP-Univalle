@@ -39,6 +39,29 @@
         <label class="form-label">Cupos Sevilla</label>
         <input type="number" name="cupos_sevilla" min="0" class="form-control" value="{{ old('cupos_sevilla', $convocatoria->cupos_sevilla ?? 0) }}" required>
     </div>
+
+    <div class="col-md-8">
+        <label class="form-label">Encuesta asignada</label>
+        <select name="encuesta_id" class="form-select">
+            <option value="">— Sin encuesta —</option>
+            @foreach(($encuestas ?? []) as $e)
+                <option value="{{ $e->id }}" {{ (string)old('encuesta_id', $convocatoria->encuesta_id ?? '') === (string)$e->id ? 'selected' : '' }}>
+                    {{ $e->nombre }} (v{{ $e->version }})
+                </option>
+            @endforeach
+        </select>
+        <small class="text-muted">Los estudiantes solo podrán postular si la convocatoria está activa y tiene encuesta asignada.</small>
+    </div>
+
+    <div class="col-md-4 d-flex align-items-end">
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="recepcion_habilitada" id="recepcion_habilitada"
+                   value="1" {{ old('recepcion_habilitada', $convocatoria->recepcion_habilitada ?? true) ? 'checked' : '' }}>
+            <label class="form-check-label" for="recepcion_habilitada">
+                Recepción habilitada
+            </label>
+        </div>
+    </div>
 </div>
 
 @if ($errors->any())

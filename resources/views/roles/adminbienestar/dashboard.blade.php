@@ -126,9 +126,9 @@
         <h2>Panel Admistrativo</h2>
         <ul class="dash-menu">
             <li class="active"><a href="#">Inicio</a></li>
-            <li><a href="{{ route('admin.estudiantes') }}">Gestión Estudiantes</a></li>
+            <li><a href="{{ route('admin.estudiantes') }}">Ir a Gestión</a></li>
             <li><a href="{{ route('admin.convocatorias') }}">Convocatorias</a></li>
-            <li><a href="{{ route('admin.reportes') }}">Reportes</a></li>
+            <li><a href="{{ Route::has('admin.reportes') ? route('admin.reportes') : '#' }}">Reportes</a></li>
             {{-- Configuración eliminada por solicitud --}}
         </ul>
     </aside>
@@ -150,7 +150,7 @@
             <div class="uv-card">
                 <h5>Reportes</h5>
                 <p>Genera reportes de asistencia y consumo.</p>
-                <a class="uv-btn" href="{{ route('admin.reportes') }}">Generar Reporte</a>
+                <a class="uv-btn" href="{{ Route::has('admin.reportes') ? route('admin.reportes') : '#' }}">Reportes</a></li>
             </div>
         </div>
 

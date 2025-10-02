@@ -23,13 +23,11 @@ class ConvocatoriaSubsidioController extends Controller
 
         $hoy = Carbon::today();
 
-        $query = ConvocatoriaSubsidio::with('periodoAcademico')
+        $query = ConvocatoriaSubsidio::with(['periodoAcademico'])
+            ->withCount('postulaciones') // <- NUEVO: contador para el badge
             ->when($q, fn($qb) => $qb->where('nombre', 'like', '%'.$q.'%'))
-            // Estado calculado por fechas (scope)
             ->estadoActual($estado)
-            // Periodo
             ->when($periodo, fn($qb) => $qb->where('periodo_academico', $periodo))
-            // Filtros de vigencia por fechas
             ->when($vigencia === 'abiertas', function ($qb) use ($hoy) {
                 $qb->whereDate('fecha_apertura', '<=', $hoy)
                    ->whereDate('fecha_cierre', '>=', $hoy);
@@ -65,10 +63,9 @@ class ConvocatoriaSubsidioController extends Controller
             'fecha_cierre' => ['required', 'date', 'after_or_equal:fecha_apertura'],
             'cupos_caicedonia' => ['required', 'integer', 'min:0'],
             'cupos_sevilla' => ['required', 'integer', 'min:0'],
-            // estado ya no viene del request
         ]);
 
-        ConvocatoriaSubsidio::create($data); // el modelo calculará estado
+        ConvocatoriaSubsidio::create($data);
 
         return redirect()->route('admin.convocatorias-subsidio.index')
             ->with('success', 'Convocatoria creada correctamente.');
@@ -94,7 +91,7 @@ class ConvocatoriaSubsidioController extends Controller
             'cupos_sevilla' => ['required', 'integer', 'min:0'],
         ]);
 
-        $convocatoria->update($data); // el modelo recalculará estado
+        $convocatoria->update($data);
 
         return redirect()->route('admin.convocatorias-subsidio.index')
             ->with('success', 'Convocatoria actualizada correctamente.');
