@@ -1,0 +1,14 @@
+<?php
+
+namespace App\Services\Contracts;
+
+use App\Models\PostulacionSubsidio;
+
+interface CalculadoraPrioridad
+{
+    /**
+     * Calcula la prioridad de una postulación y retorna:
+     * [base, f1, f2, delta_auto, delta_solicitud, total_mejora, final, detalles=>[]]
+     */
+    public function calcular(PostulacionSubsidio $p): array;
+}

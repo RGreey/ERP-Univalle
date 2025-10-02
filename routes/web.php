@@ -13,6 +13,11 @@ use App\Http\Controllers\MonitorController;
 use App\Http\Controllers\NovedadController;
 use App\Http\Controllers\SubsidioAlimenticioController;
 use App\Http\Controllers\ConvocatoriaSubsidioController;
+use App\Http\Controllers\EstudianteConvocatoriaController;
+use App\Http\Controllers\PostulacionSubsidioController;
+use App\Http\Controllers\EstudiantePostulacionController;
+use App\Http\Controllers\AdminPostulacionSubsidioController;
+use App\Http\Controllers\AdminEstudiantesController;
 use Illuminate\Foundation\Auth\EmailVerificationRequest;
 use Illuminate\Http\Request;
 
@@ -106,12 +111,16 @@ Route::get('/obtener-espacios/{lugarId}', [EventoController::class, 'obtenerEspa
 
 Route::post('/crearEvento', [EventoController::class, 'guardarEvento'])->name('guardarEvento');
 
-Route::post('/guardar-evento', 'EventoController@guardarEvento')->name('guardar-evento');
+Route::post('/guardar-evento', [EventoController::class, 'guardarEvento'])->name('guardar-evento');
 Route::get('/obtener-eventos', [EventoController::class, 'obtenerEventos']);
 Route::get('generate-pdf/{id}', [PDFController::class, 'generatePDF']);
 
-
-
+Route::get('/flush-session', function (\Illuminate\Http\Request $request) {
+    \Illuminate\Support\Facades\Auth::logout();
+    $request->session()->invalidate();
+    $request->session()->regenerateToken();
+    return redirect('/login')->with('success','Sesión reiniciada.');
+});
 
 
 Route::middleware(['auth'])->get('/calendario', function () {
@@ -289,7 +298,8 @@ Route::middleware(['auth', 'checkrole:Administrativo,Profesor,CooAdmin,AuxAdmin'
         Route::post('/{id}/cerrar', [NovedadController::class, 'closeNovedad'])->name('close');
         Route::delete('/{id}', [NovedadController::class, 'destroy'])->name('destroy');
     });
-});
+
+}); // <-- Fin del grupo de rutas de AdminBienestar
 
 Route::middleware(['auth', 'checkrole:CooAdmin,AuxAdmin'])->group(function () {
     // Rutas para plan de mantenimiento preventivo
@@ -602,33 +612,99 @@ Route::get('/probar-convocatoria-html', function () {
 })->name('probar.convocatoria.html');
 
 
-//Ruta para el AdminBienestar
-Route::middleware(['auth', 'checkrole:AdminBienestar'])->group(function () {
-    Route::get('/subsidio/admin', [SubsidioAlimenticioController::class, 'dashboard'])->name('subsidio.admin.dashboard');
+///Módulo subsidio Alimenticio
 
-    // Menú: Estudiantes
-    Route::get('/admin/estudiantes', function() {
-        return view('roles.adminbienestar.estudiantes');
-    })->name('admin.estudiantes');
+/// Módulo subsidio Alimenticio
 
-    // CRUD de convocatorias de subsidio
-    Route::resource('/admin/convocatorias-subsidio', ConvocatoriaSubsidioController::class)
-        ->names('admin.convocatorias-subsidio');
+// Alias 100% retrocompatible para el LoginController (NO LO QUITES)
+// La ruta 'subsidio.admin.dashboard' se define dentro del grupo /admin más abajo.
 
-    // Alias para conservar /admin/convocatorias (redirige al listado del resource)
-    Route::get('/admin/convocatorias', function () {
-        return redirect()->route('admin.convocatorias-subsidio.index');
-    })->name('admin.convocatorias');
+// Admin Bienestar
+Route::middleware(['auth','checkrole:AdminBienestar'])
+    ->get('/subsidio/admin', [SubsidioAlimenticioController::class, 'dashboard'])
+    ->name('subsidio.admin.dashboard');
+Route::middleware(['auth', 'checkrole:AdminBienestar'])->prefix('admin')->as('admin.')->group(function () {
 
-    // Menú: Reportes y Configuración (si tus vistas existen)
-    Route::get('/admin/reportes', function () {
-        return view('roles.adminbienestar.reportes');
-    })->name('admin.reportes');
+    // Dashboard (ruta nueva en /admin/subsidio, con nombre prefijado “admin.”)
+    Route::get('/subsidio', [\App\Http\Controllers\SubsidioAlimenticioController::class, 'dashboard'])
+        ->name('subsidio.admin.dashboard');
 
-    Route::get('/admin/configuracion', function () {
-        return view('roles.adminbienestar.configuracion');
-    })->name('admin.configuracion');
+    Route::get('/estudiantes', function () {
+        return redirect()->route('admin.estudiantes.index');
+    })->name('estudiantes');
+
+    // Módulo Estudiantes (Subsidio)
+    Route::get('/subsidio', [SubsidioAlimenticioController::class, 'dashboard'])
+        ->name('subsidio.admin.dashboard');
+
+    // Index de Estudiantes: ÚNICA ruta para /admin/estudiantes (SIN redirect)
+    Route::get('/estudiantes', [AdminEstudiantesController::class, 'index'])
+        ->name('estudiantes');
+
+    // Subrutas de Estudiantes (no declares aquí otro GET '/')
+    Route::prefix('estudiantes')->as('estudiantes.')->group(function () {
+        Route::get('/{user}', [AdminEstudiantesController::class, 'show'])->name('show');
+        Route::post('/{user}/observaciones', [AdminEstudiantesController::class, 'storeObservacion'])->name('observaciones.store');
+        Route::delete('/{user}/observaciones/{observacion}', [AdminEstudiantesController::class, 'destroyObservacion'])->name('observaciones.destroy');
+    });
+
+    // CRUD de convocatorias de subsidio (resource)
+    Route::resource('/convocatorias-subsidio', \App\Http\Controllers\ConvocatoriaSubsidioController::class)
+        ->names('convocatorias-subsidio');
+
+    // Alias: /admin/convocatorias -> listado del resource
+    Route::get('/convocatorias', fn() => redirect()->route('admin.convocatorias-subsidio.index'))
+        ->name('convocatorias');
+
+    // Postulaciones por convocatoria (UN SOLO BLOQUE, nombres estables)
+    Route::prefix('convocatorias-subsidio')->as('convocatorias-subsidio.')->group(function () {
+
+        // Listado por convocatoria
+        Route::get('/{convocatoria}/postulaciones', [\App\Http\Controllers\AdminPostulacionSubsidioController::class, 'index'])
+            ->name('postulaciones.index');
+
+        // Detalle
+        Route::get('/postulaciones/{postulacion}', [\App\Http\Controllers\AdminPostulacionSubsidioController::class, 'show'])
+            ->name('postulaciones.show');
+
+        // Estado
+        Route::post('/postulaciones/{postulacion}/estado', [\App\Http\Controllers\AdminPostulacionSubsidioController::class, 'updateEstado'])
+            ->name('postulaciones.estado');
+
+        // PDF
+        Route::get('/postulaciones/{postulacion}/pdf', [\App\Http\Controllers\AdminPostulacionSubsidioController::class, 'download'])
+            ->name('postulaciones.pdf');
+
+        // Prioridad (auto)
+        Route::post('/postulaciones/{postulacion}/recalcular-prioridad', [\App\Http\Controllers\AdminPostulacionSubsidioController::class, 'recalcularPrioridad'])
+            ->name('postulaciones.recalcular');
+
+        // Prioridad (manual)
+        Route::post('/postulaciones/{postulacion}/prioridad-manual', [\App\Http\Controllers\AdminPostulacionSubsidioController::class, 'updatePrioridadManual'])
+            ->name('postulaciones.prioridad-manual');
+    });
+
 });
 
+Route::middleware(['auth','checkrole:Estudiante'])->group(function () {
+    Route::get('/subsidio/convocatorias', [\App\Http\Controllers\EstudianteConvocatoriaController::class, 'index'])
+        ->name('subsidio.convocatorias.index');
 
+    Route::get('/subsidio/convocatorias/{convocatoria}/postular', [\App\Http\Controllers\PostulacionSubsidioController::class, 'create'])
+        ->name('subsidio.postulacion.create');
 
+    Route::post('/subsidio/convocatorias/{convocatoria}/postular', [\App\Http\Controllers\PostulacionSubsidioController::class, 'store'])
+        ->name('subsidio.postulacion.store');
+
+    Route::get('/subsidio/convocatorias/{convocatoria}/gracias', [\App\Http\Controllers\PostulacionSubsidioController::class, 'gracias'])
+        ->name('subsidio.postulacion.gracias');
+
+    Route::get('/subsidio/mis-postulaciones', [\App\Http\Controllers\EstudiantePostulacionController::class, 'index'])
+        ->name('subsidio.postulaciones.index');
+
+    Route::get('/subsidio/postulaciones/{postulacion}', [\App\Http\Controllers\EstudiantePostulacionController::class, 'show'])
+        ->name('subsidio.postulaciones.show');
+
+    Route::get('/subsidio/postulaciones/{postulacion}/pdf', [\App\Http\Controllers\EstudiantePostulacionController::class, 'download'])
+        ->name('subsidio.postulaciones.pdf');
+}); // <-- Asegúrate de que esta llave cierra correctamente el grupo y que no hay otra llave extra después de este bloque.

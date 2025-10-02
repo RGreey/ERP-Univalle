@@ -11,8 +11,8 @@
         </a>
     </div>
 
-    <!-- Filtros -->
     <form method="GET" action="{{ route('admin.convocatorias-subsidio.index') }}" class="row g-2 mb-3">
+        <!-- filtros (igual a tu versión) -->
         <div class="col-md-3">
             <input type="text" name="q" class="form-control" placeholder="Buscar por nombre" value="{{ request('q') }}">
         </div>
@@ -62,13 +62,18 @@
                         <th>Cupos Caicedonia</th>
                         <th>Cupos Sevilla</th>
                         <th>Estado</th>
-                        <th style="width:180px">Acciones</th>
+                        <th style="width:260px">Acciones</th>
                     </tr>
                 </thead>
                 <tbody>
                 @foreach($convocatorias as $c)
                     <tr>
-                        <td>{{ $c->nombre }}</td>
+                        <td>
+                            {{ $c->nombre }}
+                            @if(isset($c->postulaciones_count) && $c->postulaciones_count > 0)
+                                <span class="badge bg-dark ms-1" title="Postulaciones">{{ $c->postulaciones_count }}</span>
+                            @endif
+                        </td>
                         <td>{{ optional($c->periodoAcademico)->nombre }}</td>
                         <td>{{ \Carbon\Carbon::parse($c->fecha_apertura)->format('Y-m-d') }}</td>
                         <td>{{ \Carbon\Carbon::parse($c->fecha_cierre)->format('Y-m-d') }}</td>
@@ -83,7 +88,13 @@
                                 {{ ucfirst($estado) }}
                             </span>
                         </td>
-                        <td>
+                        <td class="d-flex gap-2">
+                            <a href="{{ route('admin.convocatorias-subsidio.postulaciones.index', ['convocatoria' => $c->id]) }}" class="btn btn-sm btn-outline-dark">
+                                Postulaciones
+                                @if(isset($c->postulaciones_count) && $c->postulaciones_count > 0)
+                                    <span class="badge bg-dark ms-1">{{ $c->postulaciones_count }}</span>
+                                @endif
+                            </a>
                             <a href="{{ route('admin.convocatorias-subsidio.edit', $c->id) }}" class="btn btn-sm btn-outline-primary">
                                 Editar
                             </a>
@@ -134,7 +145,6 @@ Swal.fire({
     icon: 'success',
     confirmButtonColor: '#cd1f32'
 });
-
 @endif
 </script>
 @endpush
