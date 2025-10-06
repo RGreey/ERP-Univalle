@@ -128,6 +128,7 @@
             <li class="active"><a href="#">Inicio</a></li>
             <li><a href="{{ route('admin.estudiantes') }}">Ir a Gestión</a></li>
             <li><a href="{{ route('admin.convocatorias') }}">Convocatorias</a></li>
+            <li><a href="{{ \Illuminate\Support\Facades\Route::has('admin.cupos.index') ? route('admin.cupos.index') : '#' }}">Cupos y Asistencias</a></li>
             <li><a href="{{ Route::has('admin.reportes') ? route('admin.reportes') : '#' }}">Reportes</a></li>
             {{-- Configuración eliminada por solicitud --}}
         </ul>
@@ -148,9 +149,9 @@
                 <a class="uv-btn" href="{{ route('admin.convocatorias') }}">Ver Convocatorias</a>
             </div>
             <div class="uv-card">
-                <h5>Reportes</h5>
-                <p>Genera reportes de asistencia y consumo.</p>
-                <a class="uv-btn" href="{{ Route::has('admin.reportes') ? route('admin.reportes') : '#' }}">Reportes</a></li>
+                <h5>Cupos y Asistencias</h5> {{-- NUEVO --}}
+                <p>Genera cupos, asigna por prioridad y controla asistencia diaria.</p>
+                <a class="uv-btn" href="{{ \Illuminate\Support\Facades\Route::has('admin.cupos.index') ? route('admin.cupos.index') : '#' }}">Abrir módulo</a>
             </div>
         </div>
 

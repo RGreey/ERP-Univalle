@@ -4,8 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\ConvocatoriaSubsidio;
 use App\Models\PeriodoAcademico;
+use App\Models\EncuestaSubsidio;
 use Illuminate\Http\Request;
-use Carbon\Carbon;
 
 class ConvocatoriaSubsidioController extends Controller
 {
@@ -17,65 +17,61 @@ class ConvocatoriaSubsidioController extends Controller
     public function index(Request $request)
     {
         $q        = $request->input('q');
-        $estado   = $request->input('estado');   // borrador | activa | cerrada
+        $estado   = $request->input('estado');
         $periodo  = $request->input('periodo');
-        $vigencia = $request->input('vigencia'); // abiertas | cerradas | proximas
+        $vigencia = $request->input('vigencia');
 
-        $hoy = Carbon::today();
+        $query = ConvocatoriaSubsidio::with(['periodoAcademico'])->withCount('postulaciones')
+            ->when($q, fn($qb)=>$qb->where('nombre','like',"%{$q}%"))
+            ->when($estado, fn($qb)=>$qb->where('estado',$estado))
+            ->when($periodo, fn($qb)=>$qb->where('periodo_academico',$periodo));
 
-        $query = ConvocatoriaSubsidio::with(['periodoAcademico'])
-            ->withCount('postulaciones') // <- NUEVO: contador para el badge
-            ->when($q, fn($qb) => $qb->where('nombre', 'like', '%'.$q.'%'))
-            ->estadoActual($estado)
-            ->when($periodo, fn($qb) => $qb->where('periodo_academico', $periodo))
-            ->when($vigencia === 'abiertas', function ($qb) use ($hoy) {
-                $qb->whereDate('fecha_apertura', '<=', $hoy)
-                   ->whereDate('fecha_cierre', '>=', $hoy);
-            })
-            ->when($vigencia === 'cerradas', function ($qb) use ($hoy) {
-                $qb->whereDate('fecha_cierre', '<', $hoy);
-            })
-            ->when($vigencia === 'proximas', function ($qb) use ($hoy) {
-                $qb->whereBetween('fecha_apertura', [$hoy, $hoy->copy()->addDays(30)]);
-            });
+        $convocatorias = $query->orderByDesc('created_at')->paginate(12)->withQueryString();
+        $periodos = PeriodoAcademico::orderBy('fechaInicio','desc')->get();
 
-        $convocatorias = $query->orderByDesc('fecha_apertura')
-            ->paginate(12)
-            ->withQueryString();
-
-        $periodos = PeriodoAcademico::orderBy('fechaInicio', 'desc')->get();
-
-        return view('roles.adminbienestar.convocatorias_subsidio.index', compact('convocatorias', 'periodos'));
+        return view('roles.adminbienestar.convocatorias_subsidio.index', compact('convocatorias','periodos'));
     }
 
     public function create()
     {
-        $periodos = PeriodoAcademico::orderBy('fechaInicio', 'desc')->get();
-        return view('roles.adminbienestar.convocatorias_subsidio.create', compact('periodos'));
+        $periodos   = PeriodoAcademico::orderBy('fechaInicio','desc')->get();
+        $encuestas  = EncuestaSubsidio::orderBy('nombre')->get(['id','nombre']);
+        return view('roles.adminbienestar.convocatorias_subsidio.create', compact('periodos','encuestas'));
     }
 
     public function store(Request $request)
     {
         $data = $request->validate([
-            'nombre' => ['required', 'string', 'max:255'],
-            'periodo_academico' => ['required', 'exists:periodoAcademico,id'],
-            'fecha_apertura' => ['required', 'date'],
-            'fecha_cierre' => ['required', 'date', 'after_or_equal:fecha_apertura'],
-            'cupos_caicedonia' => ['required', 'integer', 'min:0'],
-            'cupos_sevilla' => ['required', 'integer', 'min:0'],
+            'nombre'                  => ['required','string','max:255'],
+            'periodo_academico'       => ['required','exists:periodoAcademico,id'],
+            'fecha_apertura'          => ['required','date'],
+            'fecha_cierre'            => ['required','date','after_or_equal:fecha_apertura'],
+
+            'fecha_inicio_beneficio'  => ['nullable','date','after_or_equal:fecha_apertura'],
+            'fecha_fin_beneficio'     => ['nullable','date','after_or_equal:fecha_inicio_beneficio'],
+
+            'cupos_caicedonia'        => ['required','integer','min:0'],
+            'cupos_sevilla'           => ['required','integer','min:0'],
+
+            'encuesta_id'             => ['nullable','exists:subsidio_encuestas,id'],
+            'recepcion_habilitada'    => ['sometimes','boolean'],
         ]);
+
+        $this->normalizeNullableDates($data, ['fecha_inicio_beneficio','fecha_fin_beneficio']);
+        $data['recepcion_habilitada'] = $request->boolean('recepcion_habilitada', true);
 
         ConvocatoriaSubsidio::create($data);
 
         return redirect()->route('admin.convocatorias-subsidio.index')
-            ->with('success', 'Convocatoria creada correctamente.');
+            ->with('success','Convocatoria creada correctamente.');
     }
 
     public function edit($id)
     {
         $convocatoria = ConvocatoriaSubsidio::findOrFail($id);
-        $periodos = PeriodoAcademico::orderBy('fechaInicio', 'desc')->get();
-        return view('roles.adminbienestar.convocatorias_subsidio.edit', compact('convocatoria', 'periodos'));
+        $periodos     = PeriodoAcademico::orderBy('fechaInicio','desc')->get();
+        $encuestas    = EncuestaSubsidio::orderBy('nombre')->get(['id','nombre']);
+        return view('roles.adminbienestar.convocatorias_subsidio.edit', compact('convocatoria','periodos','encuestas'));
     }
 
     public function update(Request $request, $id)
@@ -83,18 +79,28 @@ class ConvocatoriaSubsidioController extends Controller
         $convocatoria = ConvocatoriaSubsidio::findOrFail($id);
 
         $data = $request->validate([
-            'nombre' => ['required', 'string', 'max:255'],
-            'periodo_academico' => ['required', 'exists:periodoAcademico,id'],
-            'fecha_apertura' => ['required', 'date'],
-            'fecha_cierre' => ['required', 'date', 'after_or_equal:fecha_apertura'],
-            'cupos_caicedonia' => ['required', 'integer', 'min:0'],
-            'cupos_sevilla' => ['required', 'integer', 'min:0'],
+            'nombre'                  => ['required','string','max:255'],
+            'periodo_academico'       => ['required','exists:periodoAcademico,id'],
+            'fecha_apertura'          => ['required','date'],
+            'fecha_cierre'            => ['required','date','after_or_equal:fecha_apertura'],
+
+            'fecha_inicio_beneficio'  => ['nullable','date','after_or_equal:fecha_apertura'],
+            'fecha_fin_beneficio'     => ['nullable','date','after_or_equal:fecha_inicio_beneficio'],
+
+            'cupos_caicedonia'        => ['required','integer','min:0'],
+            'cupos_sevilla'           => ['required','integer','min:0'],
+
+            'encuesta_id'             => ['nullable','exists:subsidio_encuestas,id'],
+            'recepcion_habilitada'    => ['sometimes','boolean'],
         ]);
+
+        $this->normalizeNullableDates($data, ['fecha_inicio_beneficio','fecha_fin_beneficio']);
+        $data['recepcion_habilitada'] = $request->boolean('recepcion_habilitada', true);
 
         $convocatoria->update($data);
 
         return redirect()->route('admin.convocatorias-subsidio.index')
-            ->with('success', 'Convocatoria actualizada correctamente.');
+            ->with('success','Convocatoria actualizada correctamente.');
     }
 
     public function destroy($id)
@@ -103,6 +109,15 @@ class ConvocatoriaSubsidioController extends Controller
         $convocatoria->delete();
 
         return redirect()->route('admin.convocatorias-subsidio.index')
-            ->with('success', 'Convocatoria eliminada correctamente.');
+            ->with('success','Convocatoria eliminada correctamente.');
+    }
+
+    private function normalizeNullableDates(array &$data, array $keys): void
+    {
+        foreach ($keys as $k) {
+            if (array_key_exists($k, $data) && $data[$k] === '') {
+                $data[$k] = null;
+            }
+        }
     }
 }

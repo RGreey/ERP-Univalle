@@ -31,7 +31,6 @@ class PostulacionSubsidio extends Model
         return $this->belongsTo(User::class, 'user_id');
     }
 
-    // Helpers existentes que ya te compartí (opcional mantener)
     public function respuestaPorTipo(string $tipo): ?RespuestaSubsidio
     {
         $rels = $this->relationLoaded('respuestas') ? $this->respuestas : $this->respuestas()->with('pregunta')->get();

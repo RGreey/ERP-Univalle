@@ -5,13 +5,9 @@
 @section('content')
 <style>
     .uv-card { background:#fff; border-radius:12px; box-shadow:0 8px 20px rgba(0,0,0,.06); padding:18px; }
-    .kv-table th { width: 34%; color:#6c757d; font-weight:600; }
     .badge-state { font-size:.85rem; }
     .table thead th { background:#f8f9fa; }
-    .actions .form-select { width: 140px; }
     @media (max-width: 992px){
-        .actions { flex-direction: column; align-items: stretch !important; gap: .5rem; }
-        .actions .form-select { width: 100%; }
         .filters .btn, .filters .form-control, .filters .form-select { width: 100%; }
     }
 </style>
@@ -89,42 +85,12 @@
                             @endif
                         </td>
                         <td class="text-end">
-                            <div class="d-flex justify-content-end align-items-center gap-2 actions">
-                                <!-- Gestionar (perfil del estudiante) -->
-                                @if($u)
-                                    <a class="btn btn-sm btn-outline-dark"
-                                       href="{{ route('admin.estudiantes.show', $u->id) }}">
-                                        Gestionar
-                                    </a>
-                                @endif
-
-                                <!-- Ver última postulación -->
-                                <a class="btn btn-sm btn-outline-secondary"
-                                   href="{{ route('admin.convocatorias-subsidio.postulaciones.show', $row->id) }}">
-                                    Ver postulación
+                            @if($u)
+                                <a class="btn btn-sm btn-outline-dark" href="{{ route('admin.estudiantes.show', $u->id) }}">
+                                    Gestionar
                                 </a>
-
-                                <!-- Cambiar estado rápido de la ÚLTIMA postulación -->
-                                <form method="POST" action="{{ route('admin.convocatorias-subsidio.postulaciones.estado', $row->id) }}">
-                                    @csrf
-                                    <select name="estado" class="form-select form-select-sm" title="Cambiar estado" onchange="this.form.submit()">
-                                        @foreach(['enviada','evaluada','beneficiario','rechazada','anulada'] as $st)
-                                            <option value="{{ $st }}" @selected($row->estado===$st)>{{ ucfirst($st) }}</option>
-                                        @endforeach
-                                    </select>
-                                </form>
-
-                                <!-- Prioridad manual rápida -->
-                                <form method="POST" action="{{ route('admin.convocatorias-subsidio.postulaciones.prioridad-manual', $row->id) }}" class="d-flex align-items-center gap-1">
-                                    @csrf
-                                    <select name="prioridad_final" class="form-select form-select-sm" title="Prioridad manual">
-                                        @for($i=1;$i<=9;$i++)
-                                            <option value="{{ $i }}" @selected(($row->prioridad_final) == $i)>{{ $i }}</option>
-                                        @endfor
-                                    </select>
-                                    <button class="btn btn-sm btn-outline-primary">Guardar</button>
-                                </form>
-                            </div>
+                            @endif
+                            {{-- Sin edición aquí: el índice es solo consulta --}}
                         </td>
                     </tr>
                 @endforeach
@@ -137,12 +103,4 @@
         </div>
     @endif
 </div>
-
-@push('scripts')
-@if (session('success'))
-<script>
-Swal.fire({ title: '¡Listo!', text: @json(session('success')), icon: 'success', confirmButtonColor: '#cd1f32' });
-</script>
-@endif
-@endpush
-@endsection
+@endsection     

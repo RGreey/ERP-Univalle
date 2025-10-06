@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use App\Models\PostulacionSubsidio;
 use App\Models\SubsidioObservacion;
+use App\Models\ConvocatoriaSubsidio;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -36,7 +37,7 @@ class AdminEstudiantesController extends Controller
                        ->orWhere('email','like',"%$q%");
                 });
             })
-            ->orderByRaw("FIELD(sp.estado,'beneficiario','evaluada','enviada','rechazada','anulada')") // orden útil
+            ->orderByRaw("FIELD(sp.estado,'beneficiario','evaluada','enviada','rechazada','anulada')")
             ->orderByDesc('sp.created_at')
             ->paginate(15)
             ->withQueryString();
@@ -44,11 +45,22 @@ class AdminEstudiantesController extends Controller
         return view('roles.adminbienestar.estudiantes.index', compact('ultimas','q','estado'));
     }
 
-    // Detalle de un estudiante con su historial de postulaciones
-    public function show(User $user)
+    // Detalle de un estudiante con su historial de postulaciones (filtrable por convocatoria)
+    public function show(User $user, Request $request)
     {
+        $convocatoriaId = $request->input('convocatoria');
+
+        // Opciones de convocatorias en las que este usuario ha participado
+        $convIds = PostulacionSubsidio::where('user_id', $user->id)
+            ->pluck('convocatoria_id')->unique()->values();
+
+        $convocatorias = ConvocatoriaSubsidio::whereIn('id', $convIds)
+            ->orderByDesc('created_at')
+            ->get(['id','nombre']);
+
         $postulaciones = PostulacionSubsidio::with(['convocatoria','respuestas.pregunta'])
             ->where('user_id',$user->id)
+            ->when($convocatoriaId, fn($qb)=>$qb->where('convocatoria_id', $convocatoriaId))
             ->orderByDesc('created_at')
             ->get();
 
@@ -57,7 +69,13 @@ class AdminEstudiantesController extends Controller
             ->orderByDesc('created_at')
             ->get();
 
-        return view('roles.adminbienestar.estudiantes.show', compact('user','postulaciones','observaciones'));
+        return view('roles.adminbienestar.estudiantes.show', [
+            'user'            => $user,
+            'postulaciones'   => $postulaciones,
+            'observaciones'   => $observaciones,
+            'convocatorias'   => $convocatorias,
+            'convocatoriaId'  => $convocatoriaId,
+        ]);
     }
 
     // Crear observación interna

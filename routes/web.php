@@ -18,6 +18,7 @@ use App\Http\Controllers\PostulacionSubsidioController;
 use App\Http\Controllers\EstudiantePostulacionController;
 use App\Http\Controllers\AdminPostulacionSubsidioController;
 use App\Http\Controllers\AdminEstudiantesController;
+use App\Http\Controllers\AdminCuposController;
 use Illuminate\Foundation\Auth\EmailVerificationRequest;
 use Illuminate\Http\Request;
 
@@ -623,68 +624,80 @@ Route::get('/probar-convocatoria-html', function () {
 Route::middleware(['auth','checkrole:AdminBienestar'])
     ->get('/subsidio/admin', [SubsidioAlimenticioController::class, 'dashboard'])
     ->name('subsidio.admin.dashboard');
-Route::middleware(['auth', 'checkrole:AdminBienestar'])->prefix('admin')->as('admin.')->group(function () {
 
-    // Dashboard (ruta nueva en /admin/subsidio, con nombre prefijado “admin.”)
+Route::middleware(['auth', 'checkrole:AdminBienestar'])->prefix('admin')->as('admin.')->group(function () {
+    // Dashboard (en /admin/subsidio)
     Route::get('/subsidio', [\App\Http\Controllers\SubsidioAlimenticioController::class, 'dashboard'])
         ->name('subsidio.admin.dashboard');
 
-    Route::get('/estudiantes', function () {
-        return redirect()->route('admin.estudiantes.index');
-    })->name('estudiantes');
-
-    // Módulo Estudiantes (Subsidio)
-    Route::get('/subsidio', [SubsidioAlimenticioController::class, 'dashboard'])
-        ->name('subsidio.admin.dashboard');
-
-    // Index de Estudiantes: ÚNICA ruta para /admin/estudiantes (SIN redirect)
+    // Index de Estudiantes (ruta única, sin redirect duplicado)
     Route::get('/estudiantes', [AdminEstudiantesController::class, 'index'])
         ->name('estudiantes');
 
-    // Subrutas de Estudiantes (no declares aquí otro GET '/')
+    // Subrutas de Estudiantes
     Route::prefix('estudiantes')->as('estudiantes.')->group(function () {
         Route::get('/{user}', [AdminEstudiantesController::class, 'show'])->name('show');
         Route::post('/{user}/observaciones', [AdminEstudiantesController::class, 'storeObservacion'])->name('observaciones.store');
         Route::delete('/{user}/observaciones/{observacion}', [AdminEstudiantesController::class, 'destroyObservacion'])->name('observaciones.destroy');
     });
 
-    // CRUD de convocatorias de subsidio (resource)
+    // CRUD de convocatorias de subsidio
     Route::resource('/convocatorias-subsidio', \App\Http\Controllers\ConvocatoriaSubsidioController::class)
         ->names('convocatorias-subsidio');
 
-    // Alias: /admin/convocatorias -> listado del resource
+    // Alias del listado de convocatorias
     Route::get('/convocatorias', fn() => redirect()->route('admin.convocatorias-subsidio.index'))
         ->name('convocatorias');
 
-    // Postulaciones por convocatoria (UN SOLO BLOQUE, nombres estables)
+    // Postulaciones por convocatoria
     Route::prefix('convocatorias-subsidio')->as('convocatorias-subsidio.')->group(function () {
-
-        // Listado por convocatoria
-        Route::get('/{convocatoria}/postulaciones', [\App\Http\Controllers\AdminPostulacionSubsidioController::class, 'index'])
-            ->name('postulaciones.index');
-
-        // Detalle
-        Route::get('/postulaciones/{postulacion}', [\App\Http\Controllers\AdminPostulacionSubsidioController::class, 'show'])
-            ->name('postulaciones.show');
-
-        // Estado
-        Route::post('/postulaciones/{postulacion}/estado', [\App\Http\Controllers\AdminPostulacionSubsidioController::class, 'updateEstado'])
-            ->name('postulaciones.estado');
-
-        // PDF
-        Route::get('/postulaciones/{postulacion}/pdf', [\App\Http\Controllers\AdminPostulacionSubsidioController::class, 'download'])
-            ->name('postulaciones.pdf');
-
-        // Prioridad (auto)
-        Route::post('/postulaciones/{postulacion}/recalcular-prioridad', [\App\Http\Controllers\AdminPostulacionSubsidioController::class, 'recalcularPrioridad'])
-            ->name('postulaciones.recalcular');
-
-        // Prioridad (manual)
-        Route::post('/postulaciones/{postulacion}/prioridad-manual', [\App\Http\Controllers\AdminPostulacionSubsidioController::class, 'updatePrioridadManual'])
-            ->name('postulaciones.prioridad-manual');
+        Route::get('/{convocatoria}/postulaciones', [\App\Http\Controllers\AdminPostulacionSubsidioController::class, 'index'])->name('postulaciones.index');
+        Route::get('/postulaciones/{postulacion}', [\App\Http\Controllers\AdminPostulacionSubsidioController::class, 'show'])->name('postulaciones.show');
+        Route::post('/postulaciones/{postulacion}/estado', [\App\Http\Controllers\AdminPostulacionSubsidioController::class, 'updateEstado'])->name('postulaciones.estado');
+        Route::get('/postulaciones/{postulacion}/pdf', [\App\Http\Controllers\AdminPostulacionSubsidioController::class, 'download'])->name('postulaciones.pdf');
+        Route::post('/postulaciones/{postulacion}/recalcular-prioridad', [\App\Http\Controllers\AdminPostulacionSubsidioController::class, 'recalcularPrioridad'])->name('postulaciones.recalcular');
+        Route::post('/postulaciones/{postulacion}/prioridad-manual', [\App\Http\Controllers\AdminPostulacionSubsidioController::class, 'updatePrioridadManual'])->name('postulaciones.prioridad-manual');
     });
 
+    // Cupos y asistencias (OJO: path y name relativos para que queden como admin.cupos.*)
+    // Cupos y asistencias
+    Route::get('/cupos', [\App\Http\Controllers\AdminCuposController::class, 'index'])
+        ->name('cupos.index');
+
+    Route::post('/cupos/generar-periodo', [\App\Http\Controllers\AdminCuposController::class, 'generarPeriodo'])
+        ->name('cupos.generar-periodo');
+
+    Route::post('/cupos/planificar-periodo', [\App\Http\Controllers\AdminCuposController::class, 'planificarPeriodo'])
+        ->name('cupos.planificar-periodo');
+
+    //reportes
+    Route::get('/cupos/exportar-semana', [\App\Http\Controllers\AdminCuposController::class, 'exportarSemana'])
+        ->name('cupos.exportar-semana');
+
+    Route::get('/cupos/reporte', [\App\Http\Controllers\AdminCuposController::class, 'reporteSemana'])
+        ->name('cupos.reporte-semana');
+    // NUEVO: flujo semanal
+    Route::post('/cupos/auto-asignar-semana', [AdminCuposController::class, 'autoAsignarSemana'])->name('cupos.auto-asignar-semana');
+    Route::post('/cupos/generar-plantilla', [AdminCuposController::class, 'generarPlantillaSemana'])->name('cupos.generar-plantilla');
+    Route::post('/cupos/aplicar-plantilla', [AdminCuposController::class, 'aplicarPlantillaPeriodo'])->name('cupos.aplicar-plantilla');
+
+    // NUEVO: Gestión por día/sede
+    Route::get('/cupos/dia', [\App\Http\Controllers\AdminCuposController::class, 'dia'])
+        ->name('cupos.dia');
+
+    Route::post('/cupos/dia/capacidad', [\App\Http\Controllers\AdminCuposController::class, 'actualizarCapacidadDia'])
+        ->name('cupos.dia.capacidad');
+
+    Route::post('/cupos/dia/asignar', [\App\Http\Controllers\AdminCuposController::class, 'asignarManual'])
+        ->name('cupos.dia.asignar');
+
+    Route::delete('/cupos/asignacion/{asignacion}', [\App\Http\Controllers\AdminCuposController::class, 'desasignarManual'])
+        ->name('cupos.asignacion.eliminar');
+
+    Route::post('/cupos/dia/auto-asignar', [\App\Http\Controllers\AdminCuposController::class, 'autoAsignarDia'])
+        ->name('cupos.dia.auto-asignar');
 });
+
 
 Route::middleware(['auth','checkrole:Estudiante'])->group(function () {
     Route::get('/subsidio/convocatorias', [\App\Http\Controllers\EstudianteConvocatoriaController::class, 'index'])
