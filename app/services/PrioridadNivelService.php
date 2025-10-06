@@ -69,7 +69,10 @@ class PrioridadNivelService
         $delta_auto      = min(2, ($vals['f1'] ? 1 : 0) + ($vals['f2'] ? 1 : 0));
         $delta_solicitud = 0; // reservado
         $total_mejora    = min(3, $delta_auto + $delta_solicitud);
-        $final           = $base !== null ? max(2, $base - $total_mejora) : null;
+
+        // Piso mínimo corregido a 1 (antes era 2):
+        // si la base es 1, nunca debe subir a 2 por aplicar mejoras.
+        $final           = $base !== null ? max(1, $base - $total_mejora) : null;
 
         return [
             'base'            => $base,
@@ -86,4 +89,4 @@ class PrioridadNivelService
             ],
         ];
     }
-} 
+}

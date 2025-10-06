@@ -193,8 +193,20 @@ class PostulacionSubsidioController extends Controller
                 throw ValidationException::withMessages($errors);
             }
         });
-
+        
         return redirect()->route('subsidio.postulacion.gracias', $convocatoria->id)
             ->with('success', '¡Tu postulación fue enviada con éxito!');
     }
+    public function gracias(ConvocatoriaSubsidio $convocatoria)
+{
+    // Solo permite ver la página si el usuario tiene una postulación para esta convocatoria
+    $tiene = PostulacionSubsidio::where('convocatoria_id', $convocatoria->id)
+        ->where('user_id', auth()->id())
+        ->exists();
+
+    abort_unless($tiene, 403);
+
+    // Muestra la vista simple de agradecimiento (ya existe en resources/views/roles/estudiante/subsidio/gracias.blade.php)
+    return view('roles.estudiante.subsidio.gracias');
+}
 }

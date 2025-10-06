@@ -22,11 +22,15 @@ class ConvocatoriaSubsidio extends Model
         'cupos_sevilla',
         'encuesta_id',
         'recepcion_habilitada',
+        'fecha_inicio_beneficio',
+        'fecha_fin_beneficio',
     ];
 
     protected $casts = [
         'fecha_apertura'       => 'date',
         'fecha_cierre'         => 'date',
+        'fecha_inicio_beneficio'  => 'date',
+        'fecha_fin_beneficio'     => 'date',
         'recepcion_habilitada' => 'bool',
     ];
 

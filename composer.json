@@ -13,7 +13,7 @@
         "laravel/sanctum": "^3.3",
         "laravel/tinker": "^2.8",
         "laravel/ui": "^4.5",
-        "maatwebsite/excel": "^3.1",
+        "maatwebsite/excel": "~3.1",
         "mpdf/mpdf": "^6.1",
         "realrashid/sweet-alert": "^7.1",
         "tecnick.com/tcpdf": "*",

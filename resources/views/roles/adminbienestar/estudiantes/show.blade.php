@@ -6,6 +6,13 @@
 <style>
     .uv-card { background:#fff; border-radius:12px; box-shadow:0 8px 20px rgba(0,0,0,.06); padding:18px; }
     .kv-table th { width: 34%; color:#6c757d; font-weight:600; }
+    .badge-state { font-size:.85rem; }
+    .manage-cell .form-select { width: 150px; }
+    .manage-cell .btn { white-space: nowrap; }
+    @media (max-width: 992px){
+        .manage-cell { flex-direction: column; align-items: stretch !important; gap: .5rem; }
+        .manage-cell .form-select { width: 100%; }
+    }
 </style>
 
 <div class="container">
@@ -15,7 +22,7 @@
             <div class="text-muted">{{ $user->email }}</div>
         </div>
         <div class="d-flex gap-2">
-            <a href="{{ route('admin.estudiantes.index') }}" class="btn btn-secondary btn-sm">Volver</a>
+            <a href="{{ route('admin.estudiantes') }}" class="btn btn-secondary btn-sm">Volver</a>
         </div>
     </div>
 
@@ -27,7 +34,6 @@
                     <tbody>
                         <tr><th>Nombre</th><td>{{ $user->name }}</td></tr>
                         <tr><th>Correo</th><td>{{ $user->email }}</td></tr>
-                        {{-- Si luego guardas teléfono/programa en perfil, muéstralos aquí --}}
                     </tbody>
                 </table>
             </div>
@@ -64,10 +70,24 @@
             <div class="uv-card h-100">
                 <div class="d-flex justify-content-between align-items-center mb-2">
                     <h6 class="fw-semibold mb-0">Historial de postulaciones</h6>
+
+                    {{-- Filtro por convocatoria para este estudiante --}}
+                    <form method="GET" class="d-flex align-items-center gap-2">
+                        <label class="small text-muted mb-0">Convocatoria</label>
+                        <select name="convocatoria" class="form-select form-select-sm" onchange="this.form.submit()">
+                            <option value="">Todas</option>
+                            @foreach($convocatorias as $c)
+                                <option value="{{ $c->id }}" @selected($convocatoriaId==$c->id)>{{ $c->nombre }}</option>
+                            @endforeach
+                        </select>
+                        @if(request()->has('page'))
+                            <input type="hidden" name="page" value="{{ request('page') }}">
+                        @endif
+                    </form>
                 </div>
 
                 @if($postulaciones->isEmpty())
-                    <div class="text-muted">No hay postulaciones registradas.</div>
+                    <div class="text-muted">No hay postulaciones para este filtro.</div>
                 @else
                     <div class="table-responsive">
                         <table class="table table-sm align-middle">
@@ -78,7 +98,7 @@
                                     <th>Estado</th>
                                     <th>Prioridad</th>
                                     <th>Sede</th>
-                                    <th class="text-end">Acciones</th>
+                                    <th class="text-end">Gestión</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -87,7 +107,7 @@
                                         <td>{{ $p->convocatoria?->nombre }}</td>
                                         <td>{{ $p->created_at->format('Y-m-d H:i') }}</td>
                                         <td>
-                                            <span class="badge 
+                                            <span class="badge badge-state
                                                 @if($p->estado==='beneficiario') bg-success
                                                 @elseif($p->estado==='evaluada') bg-primary
                                                 @elseif($p->estado==='rechazada') bg-danger
@@ -108,24 +128,24 @@
                                         </td>
                                         <td>{{ $p->sede }}</td>
                                         <td class="text-end">
-                                            <div class="d-flex justify-content-end gap-2">
+                                            <div class="d-flex justify-content-end align-items-center gap-2 manage-cell">
                                                 <a class="btn btn-sm btn-outline-dark"
                                                    href="{{ route('admin.convocatorias-subsidio.postulaciones.show', $p->id) }}">
-                                                    Ver
+                                                    Abrir postulación
                                                 </a>
 
-                                                {{-- Cambiar estado (usa los endpoints existentes) --}}
+                                                {{-- Cambiar estado (en Gestión) --}}
                                                 <form method="POST" action="{{ route('admin.convocatorias-subsidio.postulaciones.estado', $p->id) }}">
                                                     @csrf
-                                                    <select name="estado" class="form-select form-select-sm" onchange="this.form.submit()">
+                                                    <select name="estado" class="form-select form-select-sm" title="Cambiar estado" onchange="this.form.submit()">
                                                         @foreach(['enviada','evaluada','beneficiario','rechazada','anulada'] as $st)
                                                             <option value="{{ $st }}" @selected($p->estado===$st)>{{ ucfirst($st) }}</option>
                                                         @endforeach
                                                     </select>
                                                 </form>
 
-                                                {{-- Prioridad manual (usa el endpoint existente) --}}
-                                                <form method="POST" action="{{ route('admin.convocatorias-subsidio.postulaciones.prioridad-manual', $p->id) }}">
+                                                {{-- Prioridad manual (en Gestión) --}}
+                                                <form method="POST" action="{{ route('admin.convocatorias-subsidio.postulaciones.prioridad-manual', $p->id) }}" class="d-flex align-items-center gap-1">
                                                     @csrf
                                                     <select name="prioridad_final" class="form-select form-select-sm">
                                                         @for($i=1;$i<=9;$i++)
@@ -133,6 +153,14 @@
                                                         @endfor
                                                     </select>
                                                     <button class="btn btn-sm btn-outline-primary">Guardar</button>
+                                                </form>
+
+                                                {{-- Recalcular prioridad --}}
+                                                <form method="POST" action="{{ route('admin.convocatorias-subsidio.postulaciones.recalcular', $p->id) }}">
+                                                    @csrf
+                                                    <button class="btn btn-sm btn-outline-secondary" title="Recalcular prioridad">
+                                                        Recalcular
+                                                    </button>
                                                 </form>
                                             </div>
                                         </td>
@@ -155,4 +183,4 @@ Swal.fire({ title: '¡Listo!', text: @json(session('success')), icon: 'success',
 </script>
 @endif
 @endpush
-@endsection
+@endsection     
