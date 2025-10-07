@@ -15,7 +15,7 @@ class Kernel extends ConsoleKernel
         // $schedule->command('inspire')->hourly();
         $schedule->command('eventos:enviar-del-dia');
         $schedule->command('eventos:notificar-pendientes')->everyMinute();
-        
+        $schedule->command('subsidio:cerrar-dia')->dailyAt('23:59')->timezone(config('subsidio.timezone', 'America/Bogota'));
     }
 
     /**

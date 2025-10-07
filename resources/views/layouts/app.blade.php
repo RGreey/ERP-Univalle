@@ -180,15 +180,34 @@
                     @endif
 
                     @if(auth()->check() && auth()->user()->hasRole('Estudiante'))
-                        <li class="nav-item">
-                            <a class="nav-link" href="{{ route('subsidio.convocatorias.index') }}">
-                                Subsidio
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="subsidioDropdown"
+                            role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <span>Subsidio Alimenticio</span>
                                 @isset($subsidioConvocatoriasCount)
                                     @if($subsidioConvocatoriasCount > 0)
-                                        <span class="badge bg-success ms-1">{{ $subsidioConvocatoriasCount }}</span>
+                                        <span class="badge bg-success ms-2">{{ $subsidioConvocatoriasCount }}</span>
                                     @endif
                                 @endisset
                             </a>
+
+                            <ul class="dropdown-menu" aria-labelledby="subsidioDropdown">
+                                <li>
+                                    <a class="dropdown-item" href="{{ route('subsidio.convocatorias.index') }}">
+                                        Postulaciones
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="{{ route('app.subsidio.mis-cupos') }}">
+                                        Cupos
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="{{ route('app.subsidio.reportes.index') }}">
+                                        Reportes
+                                    </a>
+                                </li>
+                            </ul>
                         </li>
                     @endif
 
