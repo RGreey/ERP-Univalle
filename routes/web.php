@@ -19,6 +19,9 @@ use App\Http\Controllers\EstudiantePostulacionController;
 use App\Http\Controllers\AdminPostulacionSubsidioController;
 use App\Http\Controllers\AdminEstudiantesController;
 use App\Http\Controllers\AdminCuposController;
+use App\Http\Controllers\PWA\SubsidioEstudianteController;
+use App\Http\Controllers\PWA\ReportesEstudianteController;
+use App\Http\Controllers\AdminReportesController;
 use Illuminate\Foundation\Auth\EmailVerificationRequest;
 use Illuminate\Http\Request;
 
@@ -676,6 +679,9 @@ Route::middleware(['auth', 'checkrole:AdminBienestar'])->prefix('admin')->as('ad
 
     Route::get('/cupos/reporte', [\App\Http\Controllers\AdminCuposController::class, 'reporteSemana'])
         ->name('cupos.reporte-semana');
+
+
+    
     // NUEVO: flujo semanal
     Route::post('/cupos/auto-asignar-semana', [AdminCuposController::class, 'autoAsignarSemana'])->name('cupos.auto-asignar-semana');
     Route::post('/cupos/generar-plantilla', [AdminCuposController::class, 'generarPlantillaSemana'])->name('cupos.generar-plantilla');
@@ -696,6 +702,25 @@ Route::middleware(['auth', 'checkrole:AdminBienestar'])->prefix('admin')->as('ad
 
     Route::post('/cupos/dia/auto-asignar', [\App\Http\Controllers\AdminCuposController::class, 'autoAsignarDia'])
         ->name('cupos.dia.auto-asignar');
+    
+        //hub asistencias
+    // Reemplaza tus rutas de asistencias por ESTE bloque limpio:
+    Route::get('/asistencias', [\App\Http\Controllers\AdminAsistenciasController::class, 'index'])
+        ->name('asistencias.index');
+    Route::get('/asistencias/diario', [\App\Http\Controllers\AdminAsistenciasController::class, 'diario'])
+        ->name('asistencias.diario');
+    Route::get('/asistencias/semanal', [\App\Http\Controllers\AdminAsistenciasController::class, 'semanal'])
+        ->name('asistencias.semanal');
+    Route::get('/asistencias/mensual', [\App\Http\Controllers\AdminAsistenciasController::class, 'mensual'])
+        ->name('asistencias.mensual');
+    Route::get('/asistencias/cancelaciones', [\App\Http\Controllers\AdminAsistenciasController::class, 'cancelaciones'])
+        ->name('asistencias.cancelaciones');
+
+    Route::get('/reportes', [AdminReportesController::class, 'index'])->name('reportes');
+    Route::get('/reportes/{reporte}', [AdminReportesController::class, 'show'])->name('reportes.show');
+    Route::post('/reportes/{reporte}/estado', [AdminReportesController::class, 'updateEstado'])->name('reportes.estado');
+
+
 });
 
 
@@ -721,3 +746,22 @@ Route::middleware(['auth','checkrole:Estudiante'])->group(function () {
     Route::get('/subsidio/postulaciones/{postulacion}/pdf', [\App\Http\Controllers\EstudiantePostulacionController::class, 'download'])
         ->name('subsidio.postulaciones.pdf');
 }); // <-- Asegúrate de que esta llave cierra correctamente el grupo y que no hay otra llave extra después de este bloque.
+
+/// PWA ESTUDIANTE
+// PWA Subsidio - Estudiante
+Route::middleware(['auth','checkrole:Estudiante'])
+    ->prefix('app/subsidio')
+    ->name('app.subsidio.') // <-- antes era 'pwa.subsidio.'
+    ->group(function () {
+        Route::get('/mis-cupos', [SubsidioEstudianteController::class, 'misCupos'])->name('mis-cupos');
+        Route::post('/cancelar',  [SubsidioEstudianteController::class, 'cancelar'])->name('cancelar');
+        Route::post('/deshacer',  [SubsidioEstudianteController::class, 'deshacer'])->name('deshacer');
+
+        Route::get('/reportes', [\App\Http\Controllers\PWA\ReportesEstudianteController::class, 'index'])->name('reportes.index');
+        Route::get('/reportes/nuevo', [\App\Http\Controllers\PWA\ReportesEstudianteController::class, 'create'])->name('reportes.create');
+        Route::post('/reportes', [\App\Http\Controllers\PWA\ReportesEstudianteController::class, 'store'])->name('reportes.store');
+        Route::get('/reportes/{reporte}', [\App\Http\Controllers\PWA\ReportesEstudianteController::class, 'show'])->name('reportes.show');
+   
+
+        Route::get('/ping', fn() => 'ok')->name('ping');
+    });
