@@ -19,9 +19,14 @@ use App\Http\Controllers\EstudiantePostulacionController;
 use App\Http\Controllers\AdminPostulacionSubsidioController;
 use App\Http\Controllers\AdminEstudiantesController;
 use App\Http\Controllers\AdminCuposController;
+use App\Http\Controllers\AdminRestaurantesController;
 use App\Http\Controllers\PWA\SubsidioEstudianteController;
 use App\Http\Controllers\PWA\ReportesEstudianteController;
 use App\Http\Controllers\AdminReportesController;
+use App\Http\Controllers\PWA\Restaurantes\AsistenciasController;
+use App\Http\Controllers\PWA\Restaurantes\ReportesRestauranteController;
+use App\Http\Controllers\PWA\Restaurantes\RestaurantesDashboardController;
+
 use Illuminate\Foundation\Auth\EmailVerificationRequest;
 use Illuminate\Http\Request;
 
@@ -620,8 +625,16 @@ Route::get('/probar-convocatoria-html', function () {
 
 /// Módulo subsidio Alimenticio
 
-// Alias 100% retrocompatible para el LoginController (NO LO QUITES)
-// La ruta 'subsidio.admin.dashboard' se define dentro del grupo /admin más abajo.
+Route::get('/home', function () {
+    if (!auth()->check()) return redirect()->route('login');
+
+    $u = auth()->user();
+    if ($u->hasRole('AdminBienestar')) return redirect()->route('admin.subsidio.admin.dashboard');
+    if ($u->hasRole('Restaurante'))    return redirect()->route('app.restaurante.asistencias.hoy');
+    if ($u->hasRole('Estudiante'))     return redirect()->route('app.subsidio.mis-cupos');
+
+    return redirect('/'); // fallback
+})->name('home');
 
 // Admin Bienestar
 Route::middleware(['auth','checkrole:AdminBienestar'])
@@ -721,8 +734,19 @@ Route::middleware(['auth', 'checkrole:AdminBienestar'])->prefix('admin')->as('ad
     Route::post('/reportes/{reporte}/estado', [AdminReportesController::class, 'updateEstado'])->name('reportes.estado');
 
 
-});
 
+
+});
+// AdminBienestar: gestionar restaurantes
+// AdminBienestar: gestionar restaurantes (CRUD sencillo)
+Route::middleware(['auth','checkrole:AdminBienestar'])
+    ->prefix('admin/restaurantes')->as('admin.restaurantes.')->group(function () {
+    Route::get('/', [\App\Http\Controllers\AdminRestaurantesController::class, 'index'])->name('index');
+    Route::post('/', [\App\Http\Controllers\AdminRestaurantesController::class, 'store'])->name('store');
+    Route::post('/{restaurante}/attach', [\App\Http\Controllers\AdminRestaurantesController::class, 'attachUser'])->name('attach');
+    Route::delete('/{restaurante}/detach', [\App\Http\Controllers\AdminRestaurantesController::class, 'detachUser'])->name('detach');
+    Route::delete('/{restaurante}', [\App\Http\Controllers\AdminRestaurantesController::class, 'destroy'])->name('destroy');
+});
 
 Route::middleware(['auth','checkrole:Estudiante'])->group(function () {
     Route::get('/subsidio/convocatorias', [\App\Http\Controllers\EstudianteConvocatoriaController::class, 'index'])
@@ -761,7 +785,25 @@ Route::middleware(['auth','checkrole:Estudiante'])
         Route::get('/reportes/nuevo', [\App\Http\Controllers\PWA\ReportesEstudianteController::class, 'create'])->name('reportes.create');
         Route::post('/reportes', [\App\Http\Controllers\PWA\ReportesEstudianteController::class, 'store'])->name('reportes.store');
         Route::get('/reportes/{reporte}', [\App\Http\Controllers\PWA\ReportesEstudianteController::class, 'show'])->name('reportes.show');
-   
+
 
         Route::get('/ping', fn() => 'ok')->name('ping');
     });
+
+// PWA RESTAURANTE
+Route::middleware(['auth','checkrole:Restaurante'])
+    ->prefix('app/restaurantes')
+    ->group(function () {
+        Route::get('/', [RestaurantesDashboardController::class,'index'])->name('restaurantes.dashboard');
+        Route::post('/contexto', [RestaurantesDashboardController::class,'setContext'])->name('restaurantes.context.set');
+
+        Route::get('/asistencias', [AsistenciasController::class,'hoy'])->name('restaurantes.asistencias.hoy');
+        Route::post('/asistencias/{asignacion}/marcar', [AsistenciasController::class,'marcar'])->name('restaurantes.asistencias.marcar');
+
+        Route::get('/asistencias/fecha', [AsistenciasController::class,'fecha'])->name('restaurantes.asistencias.fecha');
+
+        Route::get('/asistencias/semana', [AsistenciasController::class,'semana'])->name('restaurantes.asistencias.semana');
+        Route::get('/asistencias/semana/export', [AsistenciasController::class,'exportSemana'])->name('restaurantes.asistencias.semana.export');
+
+        Route::post('/asistencias/cerrar-dia', [AsistenciasController::class,'cerrarDia'])->name('restaurantes.asistencias.cerrar-dia');
+});

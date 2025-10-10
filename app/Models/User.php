@@ -72,7 +72,10 @@ class User extends Authenticatable implements MustVerifyEmail
     {
         return $this->hasMany(Monitoria::class, 'encargado');
     }
-
+    public function restaurantes(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(\App\Models\Restaurante::class, 'subsidio_restaurante_user', 'user_id', 'restaurante_id');
+    }
     /**
      * Check if the user has one of the specified roles.
      *
@@ -85,7 +88,7 @@ class User extends Authenticatable implements MustVerifyEmail
         if (is_array($roles)) {
             // Verificamos si el usuario tiene al menos uno de los roles permitidos
             foreach ($roles as $role) {
-                if ($role === 'Profesor' || $role === 'Administrativo' || $role === 'Estudiante' || $role === 'CooAdmin' || $roles === 'AuxAdmin' || $roles === 'AdminBienestar') {
+                if ($role === 'Profesor' || $role === 'Administrativo' || $role === 'Estudiante' || $role === 'CooAdmin' || $roles === 'AuxAdmin' || $roles === 'AdminBienestar'|| $roles === 'Restaurante') {
                     if ($this->rol === $role) {
                         return true;
                     }
@@ -95,7 +98,7 @@ class User extends Authenticatable implements MustVerifyEmail
         } 
         // Si $roles no es un arreglo, verificamos si el usuario tiene el único rol permitido
         else {
-            return $this->rol === $roles && ($roles === 'Profesor' || $roles === 'Administrativo' || $roles === 'Estudiante' || $roles === 'CooAdmin' || $roles === 'AuxAdmin' || $roles === 'AdminBienestar');
+            return $this->rol === $roles && ($roles === 'Profesor' || $roles === 'Administrativo' || $roles === 'Estudiante' || $roles === 'CooAdmin' || $roles === 'AuxAdmin' || $roles === 'AdminBienestar'|| $roles === 'Restaurante');
         }
     }
 }

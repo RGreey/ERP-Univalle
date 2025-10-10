@@ -106,6 +106,8 @@ class LoginController extends Controller
                 break;
             case 'AdminBienestar':
                 return redirect()->route('subsidio.admin.dashboard');
+            case 'Restaurante':
+                return redirect()->route('restaurantes.dashboard');
             default:
                 return redirect('/'); 
                 break;

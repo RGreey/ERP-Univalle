@@ -39,4 +39,12 @@ class CupoAsignacion extends Model
     {
         return $this->belongsTo(User::class, 'user_id');
     }
+
+    // Dentro de la clase CupoAsignacion
+    public function getAsistenciaEstadoNormalizadoAttribute(): string
+    {
+        $e = $this->asistencia_estado ?: 'pendiente';
+        return $e === 'no_show' ? 'inasistencia' : $e;
+    }
+
 }

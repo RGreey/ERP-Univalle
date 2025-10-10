@@ -38,7 +38,9 @@
 
 @php
     $user = auth()->user();
-    $esBienestar = $user && method_exists($user, 'hasRole') ? $user->hasRole('AdminBienestar') : false;
+    $hasRole = fn($r) => $user && method_exists($user,'hasRole') ? $user->hasRole($r) : false;
+    $esBienestar    = $hasRole('AdminBienestar');
+    $esRestaurante  = $hasRole('Restaurante');
 @endphp
 
 <nav class="navbar navbar-expand-lg navbar-custom">
@@ -61,6 +63,12 @@
                             Módulo Bienestar
                         </a>
                     </li>
+                @elseif ($esRestaurante)
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ route('restaurantes.dashboard') }}">
+                            Gestión del restaurante
+                        </a>
+                    </li>    
                 @else
                     <li class="nav-item">
                         <a class="nav-link" href="{{ route('dashboard') }}">Inicio</a>
