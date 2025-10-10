@@ -1,0 +1,13 @@
+{
+  "name": "Restaurantes - Subsidio",
+  "short_name": "Restaurantes",
+  "start_url": "/app/restaurantes/",
+  "scope": "/app/restaurantes/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#cd1f32",
+  "icons": [
+    { "src": "/restaurantes/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/restaurantes/icons/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
