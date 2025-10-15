@@ -801,9 +801,17 @@ Route::middleware(['auth','checkrole:Restaurante'])
         Route::post('/asistencias/{asignacion}/marcar', [AsistenciasController::class,'marcar'])->name('restaurantes.asistencias.marcar');
 
         Route::get('/asistencias/fecha', [AsistenciasController::class,'fecha'])->name('restaurantes.asistencias.fecha');
+        Route::post('/asistencias/{asignacion}/marcar-fecha', [\App\Http\Controllers\PWA\Restaurantes\AsistenciasController::class,'marcarFecha'])
+            ->name('restaurantes.asistencias.marcar-fecha');
 
         Route::get('/asistencias/semana', [AsistenciasController::class,'semana'])->name('restaurantes.asistencias.semana');
         Route::get('/asistencias/semana/export', [AsistenciasController::class,'exportSemana'])->name('restaurantes.asistencias.semana.export');
 
+        // NUEVO: asistencias del mes (vista mensual con semanas y link "Ver semana")
+        Route::get('/asistencias/mes', [AsistenciasController::class,'mes'])
+            ->name('restaurantes.asistencias.mes');
         Route::post('/asistencias/cerrar-dia', [AsistenciasController::class,'cerrarDia'])->name('restaurantes.asistencias.cerrar-dia');
-});
+    });
+
+
+
