@@ -1,0 +1,56 @@
+/* PWA Restaurantes — mobile-first sin scroll horizontal */
+/* Solo afecta al módulo cuando existe el atributo data-role="restaurante" en algún contenedor ancestro. */
+
+/* Base */
+[data-role="restaurante"] .badge { font-size: .75rem; line-height: 1rem; white-space: nowrap; }
+[data-role="restaurante"] .table td,
+[data-role="restaurante"] .table th { vertical-align: middle; word-break: break-word; }
+
+/* Contenedor de acciones superiores (volver/cambiar contexto) */
+[data-role="restaurante"] .pwa-top-actions { display: flex; gap: .5rem; flex-wrap: wrap; margin-bottom: .5rem; }
+
+/* ————— Vista móvil (≤576px): listas compactas, sin tablas ————— */
+@media (max-width: 576px) {
+  /* Oculta bloques de escritorio y muestra móvil */
+  [data-role="restaurante"] .rest-desktop { display: none !important; }
+  [data-role="restaurante"] .rest-mobile { display: block !important; }
+
+  /* Lista compacta */
+  [data-role="restaurante"] .rest-list { padding: 0 .25rem .5rem .25rem; }
+  [data-role="restaurante"] .rest-item {
+    display: flex;
+    gap: .5rem;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: .5rem .5rem;
+    border-top: 1px solid #e9ecef;
+  }
+  [data-role="restaurante"] .rest-item:first-child { border-top: 0; }
+
+  /* Bloque principal: sede pequeña, nombre y email debajo */
+  [data-role="restaurante"] .rest-main { min-width: 0; }
+  [data-role="restaurante"] .rest-sede { font-size: .7rem; color: #6c757d; }
+  [data-role="restaurante"] .rest-name { font-weight: 600; }
+  [data-role="restaurante"] .rest-email { font-size: .75rem; color: #6c757d; word-break: break-all; }
+
+  /* Lateral: estado y botones compactos */
+  [data-role="restaurante"] .rest-side { text-align: right; white-space: nowrap; }
+  [data-role="restaurante"] .rest-actions .btn { padding: .125rem .4rem; font-size: .72rem; }
+
+  /* Cabeceras de tarjeta con botón a la derecha */
+  [data-role="restaurante"] .rest-card-header {
+    display: flex; justify-content: space-between; align-items: center; gap: .5rem;
+  }
+
+  /* Botones del formulario (cargar/exportar) que no rompan línea */
+  [data-role="restaurante"] .rest-form-stack .btn { width: 100%; }
+}
+
+/* Escritorio (≥577px): ocultar las listas y mantener tablas */
+@media (min-width: 577px) {
+  [data-role="restaurante"] .rest-mobile { display: none !important; }
+  [data-role="restaurante"] .rest-desktop { display: block !important; }
+}
+
+/* Cards más agradables */
+[data-role="restaurante"] .card { border-radius: .5rem; }

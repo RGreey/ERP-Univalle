@@ -30,17 +30,8 @@
         /* Espaciado consistente entre items */
         .navbar-nav .nav-link { padding: .5rem .75rem; }
     </style>
-
-    {{-- CSS específico para la PWA de Restaurantes (solo si el usuario tiene ese rol) --}}
-    @php
-        $u = auth()->user();
-        $esRestauranteHead = $u && method_exists($u,'hasRole') ? $u->hasRole('Restaurante') : false;
-    @endphp
-    @if($esRestauranteHead)
-        <link rel="stylesheet" href="{{ asset('css/pwa-restaurantes.css') }}">
-    @endif
 </head>
-<body @if(auth()->check() && method_exists(auth()->user(),'hasRole') && auth()->user()->hasRole('Restaurante')) data-role="restaurante" @endif>
+<body>
 <form id="logout-form" action="{{ route('logout') }}" method="POST" class="d-none">
     @csrf
 </form>
@@ -248,7 +239,7 @@
                         @endif
                         <li>
                             <a class="dropdown-item" href="{{ route('logout') }}"
-                            onclick="event.preventDefault(); document.getElementById('logout-form').submit();">
+                               onclick="event.preventDefault(); document.getElementById('logout-form').submit();">
                                 Cerrar sesión <i class="fa-solid fa-right-from-bracket"></i>
                             </a>
                         </li>
