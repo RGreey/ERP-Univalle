@@ -3,7 +3,8 @@
 
 @section('content')
 <div class="container">
-<h3 class="mb-3">Restaurantes / Sedes</h3>
+<x-admin.volver to="admin.subsidio.admin.dashboard" keep="q,estado" label="Volver" />
+<h3 class="mb-3">Gestión de Restaurantes / Sedes</h3>
 
 @if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
 @if(session('error'))<div class="alert alert-danger">{{ session('error') }}</div>@endif

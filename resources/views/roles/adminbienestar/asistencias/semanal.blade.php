@@ -2,7 +2,9 @@
 @section('title','Asistencias semanales')
 
 @section('content')
+
 <div class="container">
+    <x-admin.asistencias.volver keep="sede,convocatoria_id" />
 <h3 class="mb-3">Asistencias semanales</h3>
 
 <form class="row g-2 mb-3" method="GET" action="{{ route('admin.asistencias.semanal') }}">

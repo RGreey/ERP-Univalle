@@ -72,9 +72,10 @@ class User extends Authenticatable implements MustVerifyEmail
     {
         return $this->hasMany(Monitoria::class, 'encargado');
     }
-    public function restaurantes(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    public function restaurantes()
     {
-        return $this->belongsToMany(\App\Models\Restaurante::class, 'subsidio_restaurante_user', 'user_id', 'restaurante_id');
+        return $this->belongsToMany(\App\Models\Restaurante::class,
+            'subsidio_restaurante_user', 'user_id', 'restaurante_id');
     }
     /**
      * Check if the user has one of the specified roles.

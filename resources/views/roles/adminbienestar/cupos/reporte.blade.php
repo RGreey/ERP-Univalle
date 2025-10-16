@@ -39,11 +39,12 @@
                 <input type="hidden" name="convocatoria_id" value="{{ $convocatoria->id }}">
                 <input type="hidden" name="lunes" value="{{ $lunes->toDateString() }}">
                 <button class="btn btn-outline-success btn-sm">Exportar CSV</button>
+                <a class="btn btn-success btn-sm"
+                href="{{ route('admin.cupos.reporte-excel', ['convocatoria_id' => $conv->id, 'lunes' => $lunes->toDateString()]) }}">
+                    Exportar Excel
+                </a>
             </form>
-            <a class="btn btn-secondary btn-sm"
-               href="{{ route('admin.cupos.index', ['convocatoria_id'=>$convocatoria->id, 'lunes'=>$lunes->toDateString()]) }}">
-                Volver
-            </a>
+            <x-admin.volver to="admin.subsidio.admin.dashboard" keep="q,estado" label="Volver" />
         </div>
     </div>
 

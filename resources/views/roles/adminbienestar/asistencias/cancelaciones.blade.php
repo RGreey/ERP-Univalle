@@ -3,6 +3,8 @@
 
 @section('content')
 <div class="container">
+    <x-admin.volver to="admin.subsidio.admin.dashboard" keep="q,estado" label="Volver al Dashboard" />
+    <x-admin.asistencias.volver keep="sede,convocatoria_id" label="Ver asistencias" />
 <h3 class="mb-3">Cancelaciones</h3>
 
 <form class="row g-2 mb-3" method="GET" action="{{ route('admin.asistencias.cancelaciones') }}">

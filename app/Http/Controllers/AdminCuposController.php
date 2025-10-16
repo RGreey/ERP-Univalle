@@ -11,6 +11,8 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Response;
+use Maatwebsite\Excel\Facades\Excel;
+use App\Exports\CuposReporteSemanaExport;
 
 class AdminCuposController extends Controller
 {
@@ -73,6 +75,76 @@ class AdminCuposController extends Controller
         $n = $svc->autoAsignarSemana($conv, $lunes);
 
         return back()->with('success', "Semana auto-asignada (L–V). Nuevas asignaciones: {$n}.")->withInput();
+    }
+
+    // Gestión diaria (con contadores de semana L–V y sin bloqueo por sede)
+    public function dia(Request $request)
+    {
+        $data = $request->validate([
+            'convocatoria_id'     => ['required','integer','exists:convocatorias_subsidio,id'],
+            'fecha'               => ['required','date'],
+            'sede'                => ['required','in:caicedonia,sevilla'],
+            'incluir_otras_sedes' => ['sometimes','boolean'],
+            'q'                   => ['sometimes','nullable','string'],
+        ]);
+
+        $conv   = ConvocatoriaSubsidio::findOrFail($data['convocatoria_id']);
+        $fecha  = Carbon::parse($data['fecha'])->toImmutable();
+        $sede   = $data['sede'];
+        $lunes  = $fecha->startOfWeek(Carbon::MONDAY);
+        $domingo= $fecha->endOfWeek(Carbon::SUNDAY);
+        $incluirOtrasSedes = array_key_exists('incluir_otras_sedes', $data) ? (bool)$data['incluir_otras_sedes'] : true;
+        $q = $data['q'] ?? null;
+
+        // Asegura el cupo del día
+        $capBase = ($sede === 'caicedonia') ? (int)($conv->cupos_caicedonia ?? 0) : (int)($conv->cupos_sevilla ?? 0);
+        $cupo = CupoDiario::firstOrCreate(
+            ['convocatoria_id'=>$conv->id, 'fecha'=>$fecha->toDateString(), 'sede'=>$sede],
+            ['capacidad'=> $capBase, 'asignados'=>0]
+        );
+
+        $asignados = CupoAsignacion::with('user')
+            ->where('cupo_diario_id', $cupo->id)
+            ->orderBy('created_at')
+            ->get();
+
+        $usersAsignadosEseDia = CupoAsignacion::whereHas('cupo', function($q2) use ($conv, $fecha) {
+                $q2->where('convocatoria_id', $conv->id)->whereDate('fecha', $fecha->toDateString());
+            })
+            ->pluck('user_id')->unique()->all();
+
+        // Conteo de semana SOLO L–V
+        $cntSemana = CupoAsignacion::select('user_id', DB::raw('COUNT(*) as c'))
+            ->whereHas('cupo', function($q2) use ($conv, $lunes, $domingo) {
+                $q2->where('convocatoria_id', $conv->id)
+                   ->whereBetween('fecha', [$lunes->toDateString(), $domingo->toDateString()])
+                   ->whereRaw('WEEKDAY(fecha) <= 4'); // L–V
+            })
+            ->groupBy('user_id')
+            ->pluck('c', 'user_id');
+
+        // Candidatos listados (para la vista) — no filtramos aquí por sede; el filtro estricto se hace al auto-asignar
+        $candidatos = PostulacionSubsidio::with('user')
+            ->where('convocatoria_id', $conv->id)
+            ->whereIn('estado', ['evaluada','beneficiario'])
+            ->when($q, fn($qb)=>$qb->whereHas('user', fn($uq)=>$uq->where('name','like',"%$q%")->orWhere('email','like',"%$q%")))
+            ->get()
+            ->map(function ($p) use ($cntSemana, $usersAsignadosEseDia) {
+                $p->semana_asignados = (int) ($cntSemana[$p->user_id] ?? 0);
+                $p->asignado_este_dia = in_array($p->user_id, $usersAsignadosEseDia, true);
+                $p->prioridad_orden = (int) ($p->prioridad_final ?? 999);
+                return $p;
+            })
+            ->sortBy([
+                ['prioridad_orden','asc'],
+                ['semana_asignados','asc'],
+                ['created_at','asc'],
+            ])
+            ->values();
+
+        return view('roles.adminbienestar.cupos.dia', compact(
+            'conv', 'fecha','sede','cupo','asignados','candidatos','lunes','domingo','incluirOtrasSedes','q'
+        ))->with(['convocatoria'=>$conv]);
     }
 
     // “Generar plantilla con la semana actual” (solo muestra mensaje; la plantilla es la propia semana actual)
@@ -144,6 +216,23 @@ class AdminCuposController extends Controller
                ->with(['convocatoria'=>$conv]);
     }
 
+    public function exportarReporteSemanaExcel(Request $request)
+    {
+        $data = $request->validate([
+            'convocatoria_id' => ['required','integer','exists:convocatorias_subsidio,id'],
+            'lunes'           => ['required','date'],
+        ]);
+
+        $conv  = ConvocatoriaSubsidio::findOrFail($data['convocatoria_id']);
+        $lunes = Carbon::parse($data['lunes'])->startOfWeek(Carbon::MONDAY);
+
+        $filename = 'reporte_semana_'.$conv->id.'_'.$lunes->format('Ymd').'.xlsx';
+
+        return Excel::download(
+            new CuposReporteSemanaExport($conv->id, $lunes),
+            $filename
+        );
+    }
     // Export CSV
     public function exportarSemana(Request $request)
     {
@@ -183,74 +272,7 @@ class AdminCuposController extends Controller
     }
 
     // Gestión diaria (con contadores de semana L–V y sin bloqueo por sede)
-    public function dia(Request $request)
-    {
-        $data = $request->validate([
-            'convocatoria_id'     => ['required','integer','exists:convocatorias_subsidio,id'],
-            'fecha'               => ['required','date'],
-            'sede'                => ['required','in:caicedonia,sevilla'],
-            'incluir_otras_sedes' => ['sometimes','boolean'],
-            'q'                   => ['sometimes','nullable','string'],
-        ]);
 
-        $conv   = ConvocatoriaSubsidio::findOrFail($data['convocatoria_id']);
-        $fecha  = Carbon::parse($data['fecha'])->toImmutable();
-        $sede   = $data['sede'];
-        $lunes  = $fecha->startOfWeek(Carbon::MONDAY);
-        $domingo= $fecha->endOfWeek(Carbon::SUNDAY);
-        $incluirOtrasSedes = array_key_exists('incluir_otras_sedes', $data) ? (bool)$data['incluir_otras_sedes'] : true;
-        $q = $data['q'] ?? null;
-
-        // Asegura el cupo del día
-        $capBase = ($sede === 'caicedonia') ? (int)($conv->cupos_caicedonia ?? 0) : (int)($conv->cupos_sevilla ?? 0);
-        $cupo = CupoDiario::firstOrCreate(
-            ['convocatoria_id'=>$conv->id, 'fecha'=>$fecha->toDateString(), 'sede'=>$sede],
-            ['capacidad'=> $capBase, 'asignados'=>0]
-        );
-
-        $asignados = CupoAsignacion::with('user')
-            ->where('cupo_diario_id', $cupo->id)
-            ->orderBy('created_at')
-            ->get();
-
-        $usersAsignadosEseDia = CupoAsignacion::whereHas('cupo', function($q2) use ($conv, $fecha) {
-                $q2->where('convocatoria_id', $conv->id)->whereDate('fecha', $fecha->toDateString());
-            })
-            ->pluck('user_id')->unique()->all();
-
-        // Conteo de semana SOLO L–V
-        $cntSemana = CupoAsignacion::select('user_id', DB::raw('COUNT(*) as c'))
-            ->whereHas('cupo', function($q2) use ($conv, $lunes, $domingo) {
-                $q2->where('convocatoria_id', $conv->id)
-                   ->whereBetween('fecha', [$lunes->toDateString(), $domingo->toDateString()])
-                   ->whereRaw('WEEKDAY(fecha) <= 4'); // L–V
-            })
-            ->groupBy('user_id')
-            ->pluck('c', 'user_id');
-
-        $candidatos = PostulacionSubsidio::with('user')
-            ->where('convocatoria_id', $conv->id)
-            ->whereIn('estado', ['evaluada','beneficiario'])
-            ->when(!$incluirOtrasSedes, fn($qb)=>$qb->where('sede', ucfirst($sede)))
-            ->when($q, fn($qb)=>$qb->whereHas('user', fn($uq)=>$uq->where('name','like',"%$q%")->orWhere('email','like',"%$q%")))
-            ->get()
-            ->map(function ($p) use ($cntSemana, $usersAsignadosEseDia) {
-                $p->semana_asignados = (int) ($cntSemana[$p->user_id] ?? 0);
-                $p->asignado_este_dia = in_array($p->user_id, $usersAsignadosEseDia, true);
-                $p->prioridad_orden = (int) ($p->prioridad_final ?? 999);
-                return $p;
-            })
-            ->sortBy([
-                ['prioridad_orden','asc'],
-                ['semana_asignados','asc'],
-                ['created_at','asc'],
-            ])
-            ->values();
-
-        return view('roles.adminbienestar.cupos.dia', compact(
-            'conv', 'fecha','sede','cupo','asignados','candidatos','lunes','domingo','incluirOtrasSedes','q'
-        ))->with(['convocatoria'=>$conv]);
-    }
 
     public function actualizarCapacidadDia(Request $request)
     {
@@ -268,6 +290,7 @@ class AdminCuposController extends Controller
 
         return back()->with('success', 'Capacidad actualizada.');
     }
+
 
     public function asignarManual(Request $request)
     {
@@ -354,7 +377,6 @@ class AdminCuposController extends Controller
         $candidatos = PostulacionSubsidio::with('user')
             ->where('convocatoria_id', $conv->id)
             ->whereIn('estado', ['evaluada','beneficiario'])
-            ->when(!$incluirOtrasSedes, fn($qb)=>$qb->where('sede', ucfirst($sede)))
             ->get()
             ->map(function ($p) use ($cntSemana) {
                 $p->semana_asignados = (int) ($cntSemana[$p->user_id] ?? 0);
@@ -368,12 +390,33 @@ class AdminCuposController extends Controller
             ])
             ->values();
 
+        // Cachear preferencias
+        $prefCache = [];
+        foreach ($candidatos as $p) {
+            $prefCache[$p->user_id] = $this->preferenciasPorDiaCtl($p);
+        }
+
         $creados = 0;
 
-        DB::transaction(function () use ($cupo, $conv, $fecha, $sede, $respetarLimite, $maxPorSemana, $candidatos, $usersAsignadosEseDia, &$creados) {
+        DB::transaction(function () use ($cupo, $conv, $fecha, $sede, $respetarLimite, $maxPorSemana, $candidatos, $usersAsignadosEseDia, $incluirOtrasSedes, $prefCache, &$creados) {
+            $dISO = $fecha->dayOfWeekIso;
+
             foreach ($candidatos as $p) {
                 if ($cupo->asignados >= $cupo->capacidad) break;
                 if (in_array($p->user_id, $usersAsignadosEseDia, true)) continue;
+
+                $row = $prefCache[$p->user_id][$dISO] ?? ['caicedonia'=>true,'sevilla'=>true,'no'=>false];
+
+                // Si marcó "no" para el día, no asignar.
+                if (!empty($row['no'])) continue;
+
+                // Si explicitó sede, exigir esa misma sede. Si no explicitó y $incluirOtrasSedes=false, no asignar.
+                $explicit = array_key_exists('caicedonia',$row) || array_key_exists('sevilla',$row);
+                if ($explicit) {
+                    if (empty($row[$sede])) continue;
+                } else {
+                    if (!$incluirOtrasSedes) continue;
+                }
 
                 if ($respetarLimite) {
                     $max = $maxPorSemana[$p->prioridad_orden] ?? 1;
@@ -381,6 +424,7 @@ class AdminCuposController extends Controller
                     if ($semanaCnt >= $max) continue;
                 }
 
+                // Evitar duplicado en esta sede/día
                 $existe = CupoAsignacion::whereHas('cupo', function($q) use ($conv, $fecha, $sede) {
                         $q->where('convocatoria_id', $conv->id)
                           ->whereDate('fecha', $fecha->toDateString())
@@ -404,5 +448,125 @@ class AdminCuposController extends Controller
         });
 
         return back()->with('success', "Auto-asignados: {$creados}.");
+    }
+
+    private function preferenciasPorDiaCtl(PostulacionSubsidio $p): array
+    {
+        $raw = (array) ($p->preferencias_dias ?? []);
+        $diasKeyToIso = [
+            '1'=>1,'2'=>2,'3'=>3,'4'=>4,'5'=>5,
+            'lunes'=>1,'martes'=>2,'miercoles'=>3,'miércoles'=>3,'jueves'=>4,'viernes'=>5,
+        ];
+        $norm = function (string $v): string {
+            $v = mb_strtolower(trim($v));
+            $v = str_replace(['á','é','í','ó','ú'], ['a','e','i','o','u'], $v);
+            return $v;
+        };
+        $out = [];
+        foreach ([1,2,3,4,5] as $i) $out[$i] = ['caicedonia'=>true,'sevilla'=>true,'no'=>false];
+        foreach ($raw as $k => $val) {
+            $kNorm = $norm((string)$k);
+            $dISO  = $diasKeyToIso[$kNorm] ?? null;
+            if (!$dISO) continue;
+            $vNorm = $norm((string)$val);
+            if ($vNorm === 'no_dia' || $vNorm === 'no' || $vNorm === 'ninguno') {
+                $out[$dISO] = ['caicedonia'=>false,'sevilla'=>false,'no'=>true];
+            } elseif ($vNorm === 'caicedonia') {
+                $out[$dISO] = ['caicedonia'=>true,'sevilla'=>false,'no'=>false];
+            } elseif ($vNorm === 'sevilla') {
+                $out[$dISO] = ['caicedonia'=>false,'sevilla'=>true,'no'=>false];
+            }
+        }
+        return $out;
+    }
+
+    private function parsePreferenciasDiasController(PostulacionSubsidio $p): array
+    {
+        $dias = ['lunes'=>1,'martes'=>2,'miercoles'=>3,'miércoles'=>3,'jueves'=>4,'viernes'=>5];
+        $sedes = ['caicedonia','sevilla'];
+
+        $candidatos = [];
+        foreach (['preferencias_dias','pref_dias','dias_preferidos','dias','preferencias'] as $prop) {
+            if (isset($p->{$prop})) $candidatos[] = $p->{$prop};
+        }
+        foreach (['respuestas_json','respuestas'] as $prop) {
+            if (isset($p->{$prop})) $candidatos[] = $p->{$prop};
+        }
+
+        $data = [];
+        foreach ($candidatos as $src) {
+            if (is_string($src)) {
+                $decoded = json_decode($src, true);
+                if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                    $data[] = $decoded;
+                }
+            } elseif (is_array($src)) {
+                $data[] = $src;
+            } elseif (is_object($src)) {
+                $data[] = json_decode(json_encode($src), true);
+            }
+        }
+
+        if (empty($data)) {
+            $out = [];
+            foreach ([1,2,3,4,5] as $dISO) {
+                $out[$dISO] = ['caicedonia'=>true,'sevilla'=>true,'no'=>false];
+            }
+            return $out;
+        }
+
+        $flat = [];
+        $flatten = function ($arr, $prefix='') use (&$flatten, &$flat) {
+            foreach ($arr as $k=>$v) {
+                $key = ($prefix === '' ? $k : $prefix.'.'.$k);
+                if (is_array($v)) $flatten($v, $key);
+                else $flat[$key] = $v;
+            }
+        };
+        foreach ($data as $arr) $flatten($arr);
+
+        $normKey = function (string $k): string {
+            $k = mb_strtolower($k);
+            $k = str_replace(['á','é','í','ó','ú'], ['a','e','i','o','u'], $k);
+            return $k;
+        };
+        $truthy = function ($v): bool {
+            if (is_bool($v)) return $v;
+            if (is_numeric($v)) return ((int)$v) === 1;
+            $s = mb_strtolower(trim((string)$v));
+            return in_array($s, ['1','true','si','sí','on','y','yes','x','✓','check','checked'], true);
+        };
+
+        $pref = [];
+        foreach ($flat as $k => $v) {
+            $nk = $normKey($k);
+            $foundDia = null;
+            foreach ($dias as $diaTxt => $dISO) {
+                if (str_contains($nk, $diaTxt)) { $foundDia = $dISO; break; }
+            }
+            if (!$foundDia) continue;
+
+            if (str_contains($nk, 'no_necesita') || str_contains($nk, 'no-necesita') || str_contains($nk, 'ninguno') || str_contains($nk, 'no')) {
+                $pref[$foundDia]['no'] = $truthy($v);
+            }
+
+            foreach ($sedes as $s) {
+                if (str_contains($nk, $s)) {
+                    $pref[$foundDia][$s] = $truthy($v);
+                }
+            }
+        }
+
+        $out = [];
+        foreach ([1,2,3,4,5] as $dISO) {
+            $row = $pref[$dISO] ?? [];
+            $no  = (bool)($row['no'] ?? false);
+            $c = array_key_exists('caicedonia', $row) ? (bool)$row['caicedonia'] : !$no;
+            $s = array_key_exists('sevilla', $row)    ? (bool)$row['sevilla']    : !$no;
+            if ($no) { $c = false; $s = false; }
+            $out[$dISO] = ['caicedonia'=>$c,'sevilla'=>$s,'no'=>$no];
+        }
+
+        return $out;
     }
 }

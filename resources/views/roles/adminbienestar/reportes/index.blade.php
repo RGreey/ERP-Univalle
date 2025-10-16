@@ -3,6 +3,7 @@
 
 @section('content')
 <div class="container">
+    <x-admin.volver to="admin.subsidio.admin.dashboard" keep="q,estado" label="Volver" />
 <h3 class="mb-3">Reportes de estudiantes</h3>
 
 @if(session('success'))<div class="alert alert-success">{{ session('success') }}</div>@endif
