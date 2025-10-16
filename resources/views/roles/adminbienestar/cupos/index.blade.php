@@ -14,7 +14,9 @@
 
 <div class="container">
     <div class="d-flex justify-content-between align-items-center mb-3">
+        <x-admin.volver to="admin.subsidio.admin.dashboard" keep="q,estado" label="Volver" />
         <h2 class="mb-0">Cupos y Asistencias</h2>
+        
         <a href="{{ route('admin.convocatorias') }}" class="btn btn-outline-dark btn-sm">Ver convocatorias</a>
     </div>
 
@@ -75,12 +77,6 @@
                 <input type="hidden" name="convocatoria_id" value="{{ $convId }}">
                 <input type="hidden" name="lunes" value="{{ $lunes->toDateString() }}">
                 <button class="btn btn-outline-primary">Asignar automáticamente semana actual</button>
-            </form>
-
-            <form method="GET" action="{{ route('admin.cupos.exportar-semana') }}" class="ms-auto">
-                <input type="hidden" name="convocatoria_id" value="{{ $convId }}">
-                <input type="hidden" name="lunes" value="{{ $lunes->toDateString() }}">
-                <button class="btn btn-outline-success">Exportar CSV (semana)</button>
             </form>
 
             <form method="GET" action="{{ route('admin.cupos.reporte-semana') }}">

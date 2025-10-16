@@ -14,6 +14,9 @@ class ReglasCuposService
         if (!$asig->relationLoaded('cupo')) $asig->load('cupo');
         if (!$asig->cupo) return false;
 
+        // Bloquea si el día es festivo
+        if ($this->esFestivo($asig->cupo)) return false;
+
         $hora = (string) config('subsidio.hora_limite_cancelar', '09:30');
         [$lim, $fecha] = $this->limiteDelDia($asig->cupo, $hora);
 
@@ -25,6 +28,9 @@ class ReglasCuposService
         if (($asig->asistencia_estado ?? '') !== 'cancelado') return false;
         if (!$asig->relationLoaded('cupo')) $asig->load('cupo');
         if (!$asig->cupo) return false;
+
+        // También bloquea si el día es festivo
+        if ($this->esFestivo($asig->cupo)) return false;
 
         $hora = (string) config('subsidio.hora_limite_deshacer', '11:00');
         [$lim, $fecha] = $this->limiteDelDia($asig->cupo, $hora);
@@ -40,6 +46,8 @@ class ReglasCuposService
         }
         if (!$asig->relationLoaded('cupo')) $asig->load('cupo');
         if (!$asig->cupo) return 'Cupo no encontrado.';
+
+        if ($this->esFestivo($asig->cupo)) return 'Día festivo: no hay servicio.';
 
         $hora = (string) config('subsidio.hora_limite_cancelar', '09:30');
         [$lim, $fecha] = $this->limiteDelDia($asig->cupo, $hora);
@@ -58,6 +66,8 @@ class ReglasCuposService
         }
         if (!$asig->relationLoaded('cupo')) $asig->load('cupo');
         if (!$asig->cupo) return 'Cupo no encontrado.';
+
+        if ($this->esFestivo($asig->cupo)) return 'Día festivo: no aplica.';
 
         $hora = (string) config('subsidio.hora_limite_deshacer', '11:00');
         [$lim, $fecha] = $this->limiteDelDia($asig->cupo, $hora);
@@ -95,6 +105,12 @@ class ReglasCuposService
     private function esDiaHabil(Carbon $fecha): bool
     {
         return in_array($fecha->dayOfWeekIso, config('subsidio.dias_habiles_iso', [1,2,3,4,5]), true);
+    }
+
+    private function esFestivo(CupoDiario $cupo): bool
+    {
+        // Nueva bandera agregada por migración
+        return (bool) ($cupo->es_festivo ?? false);
     }
 
     private function tz(): string

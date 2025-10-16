@@ -50,9 +50,17 @@ class RestaurantesDashboardController extends Controller
         }
 
         if (!empty($data['convocatoria_id'])) {
-            session(['restaurante_convocatoria_id'=>$data['convocatoria_id']]);
+            $conv = ConvocatoriaSubsidio::find($data['convocatoria_id']);
+            if ($conv) {
+                session([
+                    'restaurante_convocatoria_id'     => $conv->id,
+                    'restaurante_convocatoria_nombre' => $conv->nombre,
+                ]);
+            } else {
+                session()->forget(['restaurante_convocatoria_id','restaurante_convocatoria_nombre']);
+            }
         } else {
-            session()->forget('restaurante_convocatoria_id');
+            session()->forget(['restaurante_convocatoria_id','restaurante_convocatoria_nombre']);
         }
 
         return redirect()->route('restaurantes.dashboard')->with('success','Contexto actualizado.');

@@ -690,6 +690,10 @@ Route::middleware(['auth', 'checkrole:AdminBienestar'])->prefix('admin')->as('ad
     Route::get('/cupos/exportar-semana', [\App\Http\Controllers\AdminCuposController::class, 'exportarSemana'])
         ->name('cupos.exportar-semana');
 
+
+    Route::get('/cupos/reporte-excel', [AdminCuposController::class, 'exportarReporteSemanaExcel'])
+    ->name('cupos.reporte-excel');
+
     Route::get('/cupos/reporte', [\App\Http\Controllers\AdminCuposController::class, 'reporteSemana'])
         ->name('cupos.reporte-semana');
 

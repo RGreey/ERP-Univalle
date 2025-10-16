@@ -14,6 +14,7 @@
 
 <div class="container">
     <div class="d-flex justify-content-between align-items-center mb-3">
+        <x-admin.volver to="admin.subsidio.admin.dashboard" keep="q,estado" label="Volver" />
         <h2 class="mb-0">Estudiantes (Subsidio)</h2>
         <a href="{{ route('admin.convocatorias') }}" class="btn btn-outline-dark btn-sm">Ver convocatorias</a>
     </div>

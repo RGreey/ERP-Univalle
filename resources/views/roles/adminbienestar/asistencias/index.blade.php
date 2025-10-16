@@ -4,9 +4,10 @@
 @section('content')
 <div class="container">
     <div class="d-flex flex-wrap justify-content-between align-items-center mb-3">
+        <x-admin.volver to="admin.subsidio.admin.dashboard" keep="q,estado" label="Volver" />
         <h3 class="mb-0">Asistencias</h3>
         <div class="d-flex gap-2">
-            <a class="btn btn-outline-secondary" href="{{ route('admin.subsidio.admin.dashboard') }}">Ver dashboard</a>
+            
             <a class="btn btn-outline-danger" href="{{ route('admin.asistencias.cancelaciones') }}">Cancelaciones</a>
         </div>
     </div>
