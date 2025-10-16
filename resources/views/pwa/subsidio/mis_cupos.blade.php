@@ -19,66 +19,78 @@
 
     <div class="d-flex justify-content-between align-items-center mb-3">
         <a class="btn btn-outline-secondary btn-sm" href="{{ route('app.subsidio.mis-cupos', ['semana' => $lunes->copy()->subWeek()->toDateString()]) }}">&laquo; Semana anterior</a>
-        <div class="text-muted">Semana {{ $lunes->format('Y-m-d') }} al {{ $lunes->copy()->addDays(6)->format('Y-m-d') }}</div>
-        <a class="btn btn-outline-secondary btn-sm" href="{{ route('app.subsidio.mis-cupos', ['semana' => $lunes->copy()->addWeek()->toDateString()]) }}">Siguiente semana &raquo;</a>
+        <span class="text-muted">Semana que inicia: {{ $lunes->toDateString() }}</span>
+        <a class="btn btn-outline-secondary btn-sm" href="{{ route('app.subsidio.mis-cupos', ['semana' => $lunes->copy()->addWeek()->toDateString()]) }}">Semana siguiente &raquo;</a>
     </div>
 
-    <div class="card shadow-sm">
+    <div class="card">
         <div class="card-body p-0">
             <div class="table-responsive">
                 <table class="table table-sm align-middle mb-0">
                     <thead>
-                    <tr>
-                        <th>Fecha</th>
-                        <th>Sede</th>
-                        <th>Estado</th>
-                        <th class="text-end">Acciones</th>
-                    </tr>
+                        <tr>
+                            <th>Fecha</th>
+                            <th>Sede</th>
+                            <th>Estado</th>
+                            <th class="text-end">Acciones</th>
+                        </tr>
                     </thead>
                     <tbody>
                     @forelse($asignaciones as $a)
                         @php
-                            $fecha = $a->cupo->fecha;
-                            $estado = $a->asistencia_estado ?? 'pendiente';
+                            $fecha = \Carbon\Carbon::parse($a->cupo->fecha);
+                            $estadoRaw = $a->asistencia_estado ?? 'pendiente';
+                            // Normalizar: si es festivo, el estado visible es "festivo"
+                            $estadoUi = ($a->cupo?->es_festivo) ? 'festivo' : ($estadoRaw === 'no_show' ? 'inasistencia' : $estadoRaw);
                             $nombreDia = ucfirst($fecha->locale('es')->isoFormat('dddd'));
+                            $badgeColor = match($estadoUi){
+                                'cancelado'   => 'danger',
+                                'asistio'     => 'success',
+                                'inasistencia'=> 'warning',
+                                'festivo'     => 'info',
+                                default       => 'secondary'
+                            };
                         @endphp
                         <tr>
                             <td>{{ $fecha->toDateString() }} ({{ $nombreDia }})</td>
                             <td>{{ ucfirst($a->cupo->sede) }}</td>
                             <td>
-                                <span class="badge text-bg-{{ $estado === 'cancelado' ? 'danger' : ($estado === 'asistio' ? 'success' : ($estado === 'no_show' ? 'warning' : 'secondary')) }}">
-                                    {{ $estado }}
-                                </span>
+                                <span class="badge text-bg-{{ $badgeColor }}">{{ $estadoUi }}</span>
                             </td>
                             <td class="text-end">
-                                {{-- Cancelar --}}
-                                @if(!empty($a->can_cancel) && $a->can_cancel)
-                                    <form method="POST" action="{{ route('app.subsidio.cancelar') }}" class="d-inline">
-                                        @csrf
-                                        <input type="hidden" name="asignacion_id" value="{{ $a->id }}">
-                                        <input type="text" name="motivo" class="form-control form-control-sm d-inline-block" style="max-width:220px" placeholder="Motivo (opcional)">
-                                        <button class="btn btn-sm btn-outline-danger" title="Hora límite: {{ $a->lim_cancel_hhmm }}">Cancelar</button>
-                                    </form>
-                                @elseif($estado === 'pendiente')
-                                    <span class="d-inline-block" tabindex="0" data-bs-toggle="tooltip" data-bs-placement="top"
-                                          title="No puedes cancelar: {{ $a->cancel_reason }} Hora límite: {{ $a->lim_cancel_hhmm }}">
-                                        <button class="btn btn-sm btn-outline-secondary" type="button" disabled>Cancelar</button>
-                                    </span>
-                                @endif
+                                {{-- Si es festivo no hay acciones --}}
+                                @if($a->cupo?->es_festivo)
+                                    <span class="text-muted small">Día festivo: no aplica.</span>
+                                @else
+                                    {{-- Cancelar --}}
+                                    @if(!empty($a->can_cancel) && $a->can_cancel)
+                                        <form method="POST" action="{{ route('app.subsidio.cancelar') }}" class="d-inline">
+                                            @csrf
+                                            <input type="hidden" name="asignacion_id" value="{{ $a->id }}">
+                                            <input type="text" name="motivo" class="form-control form-control-sm d-inline-block" style="max-width:220px" placeholder="Motivo (opcional)">
+                                            <button class="btn btn-sm btn-outline-danger" title="Hora límite: {{ $a->lim_cancel_hhmm }}">Cancelar</button>
+                                        </form>
+                                    @elseif($estadoUi === 'pendiente')
+                                        <span class="d-inline-block" tabindex="0" data-bs-toggle="tooltip" data-bs-placement="top"
+                                              title="No puedes cancelar: {{ $a->cancel_reason }} Hora límite: {{ $a->lim_cancel_hhmm }}">
+                                            <button class="btn btn-sm btn-outline-secondary" type="button" disabled>Cancelar</button>
+                                        </span>
+                                    @endif
 
-                                {{-- Deshacer --}}
-                                @if(!empty($a->can_undo) && $a->can_undo)
-                                    <form method="POST" action="{{ route('app.subsidio.deshacer') }}" class="d-inline ms-2">
-                                        @csrf
-                                        <input type="hidden" name="asignacion_id" value="{{ $a->id }}">
-                                        <input type="text" name="motivo" class="form-control form-control-sm d-inline-block" style="max-width:220px" placeholder="Motivo (requerido)" required>
-                                        <button class="btn btn-sm btn-outline-primary" title="Hora límite: {{ $a->lim_undo_hhmm }}">Deshacer</button>
-                                    </form>
-                                @elseif($estado === 'cancelado')
-                                    <span class="d-inline-block ms-2" tabindex="0" data-bs-toggle="tooltip" data-bs-placement="top"
-                                          title="No puedes deshacer: {{ $a->undo_reason }} Hora límite: {{ $a->lim_undo_hhmm }}">
-                                        <button class="btn btn-sm btn-outline-secondary" type="button" disabled>Deshacer</button>
-                                    </span>
+                                    {{-- Deshacer --}}
+                                    @if(!empty($a->can_undo) && $a->can_undo)
+                                        <form method="POST" action="{{ route('app.subsidio.deshacer') }}" class="d-inline ms-2">
+                                            @csrf
+                                            <input type="hidden" name="asignacion_id" value="{{ $a->id }}">
+                                            <input type="text" name="motivo" class="form-control form-control-sm d-inline-block" style="max-width:220px" placeholder="Motivo (requerido)" required>
+                                            <button class="btn btn-sm btn-outline-primary" title="Hora límite: {{ $a->lim_undo_hhmm }}">Deshacer</button>
+                                        </form>
+                                    @elseif($estadoUi === 'cancelado')
+                                        <span class="d-inline-block ms-2" tabindex="0" data-bs-toggle="tooltip" data-bs-placement="top"
+                                              title="No puedes deshacer: {{ $a->undo_reason }} Hora límite: {{ $a->lim_undo_hhmm }}">
+                                            <button class="btn btn-sm btn-outline-secondary" type="button" disabled>Deshacer</button>
+                                        </span>
+                                    @endif
                                 @endif
                             </td>
                         </tr>
@@ -98,16 +110,7 @@
 // Inicializa tooltips de Bootstrap 5
 document.addEventListener('DOMContentLoaded', function () {
   var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
-  tooltipTriggerList.forEach(function (tooltipTriggerEl) {
-    new bootstrap.Tooltip(tooltipTriggerEl)
-  })
+  tooltipTriggerList.forEach(function (el) { new bootstrap.Tooltip(el); });
 });
-
-// Registrar SW aislado (opcional)
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/subsidio/sw.js', { scope: '/app/subsidio/' }).catch(()=>{});
-  });
-}
 </script>
 @endpush

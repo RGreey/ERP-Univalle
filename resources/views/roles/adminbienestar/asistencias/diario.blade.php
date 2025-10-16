@@ -36,7 +36,8 @@
     Totales — Pendiente: {{ $totales['pendiente'] ?? 0 }} ·
     <span class="text-danger">Cancelado: {{ $totales['cancelado'] ?? 0 }}</span> ·
     <span class="text-success">Asistió: {{ $totales['asistio'] ?? 0 }}</span> ·
-    <span class="text-warning">Inasistencia: {{ $totales['inasistencia'] ?? 0 }}</span>
+    <span class="text-warning">Inasistencia: {{ $totales['inasistencia'] ?? 0 }}</span> ·
+    <span class="text-info">Festivo: {{ $totales['festivo'] ?? 0 }}</span>
 </div>
 
 <div class="card">
@@ -57,11 +58,13 @@
         @forelse($items as $a)
             @php
             $raw = $a->asistencia_estado ?? 'pendiente';
-            $estado = $raw === 'no_show' ? 'inasistencia' : $raw;
-            $badge = match($estado){ 'cancelado'=>'danger','asistio'=>'success','inasistencia'=>'warning', default=>'secondary' };
+            $estado = ($a->cupo?->es_festivo) ? 'festivo' : ($raw === 'no_show' ? 'inasistencia' : $raw);
+            $badge = match($estado){ 'cancelado'=>'danger','asistio'=>'success','inasistencia'=>'warning','festivo'=>'info', default=>'secondary' };
             $title = null;
             if ($estado==='cancelado') {
                 $title = 'Motivo: '.($a->cancelacion_motivo ?? '—').' | Cancelada: '.(optional($a->cancelada_en)?->format('Y-m-d H:i') ?? '—').' | Origen: '.($a->cancelacion_origen ?? '—');
+            } elseif ($estado==='festivo') {
+                $title = 'Día festivo: no hay servicio';
             }
             @endphp
             <tr>
@@ -80,6 +83,8 @@
                 Hora: {{ optional($a->cancelada_en)?->format('H:i') ?? '—' }} ({{ optional($a->cancelada_en)?->format('Y-m-d') ?? '' }})
                 @elseif($estado==='inasistencia')
                 Marcado por cierre de día.
+                @elseif($estado==='festivo')
+                Declarado festivo.
                 @else
                 —
                 @endif

@@ -31,14 +31,20 @@
     <div class="col-auto align-self-end">
     <button class="btn btn-primary">Filtrar</button>
     </div>
+    <div class="col-auto align-self-end">
+    <a class="btn btn-outline-success"
+       href="{{ route('admin.asistencias.mensual.export', [
+            'mes'=>substr($mes,0,7),
+            'sede'=>$sede,
+            'convocatoria_id'=>($convocatoriaId ?? null)
+       ]) }}">Exportar Excel (mes)</a>
+    </div>
 </form>
 
-<p class="text-muted">Desde {{ $inicio->toDateString() }} hasta {{ $fin->toDateString() }} (solo L–V)</p>
-
 @forelse($weeks as $w)
-    <div class="card mb-4">
-    <div class="card-header">
-        <strong>{{ $w['label'] }}</strong>
+    <div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <div><strong>{{ $w['label'] }}</strong></div>
         <span class="text-muted">({{ $w['inicio']->toDateString() }} al {{ $w['fin']->toDateString() }})</span>
     </div>
     <div class="card-body p-0">
@@ -70,6 +76,7 @@
                         'asistio'      => 'success',
                         'inasistencia' => 'warning',
                         'pendiente'    => 'secondary',
+                        'festivo'      => 'info',
                         default        => null
                     };
                     @endphp

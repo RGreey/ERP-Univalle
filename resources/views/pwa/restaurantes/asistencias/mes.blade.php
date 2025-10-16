@@ -8,7 +8,8 @@
 
 <h3 class="mb-3">Asistencias del mes</h3>
 
-<form class="row g-2 mb-3" method="GET" action="{{ route('restaurantes.asistencias.mes') }}">
+{{-- Filtros (GET) --}}
+<form class="row g-2 mb-2" method="GET" action="{{ route('restaurantes.asistencias.mes') }}">
     <div class="col-7 col-sm-4 col-md-3">
     <label class="form-label">Mes</label>
     <input type="month" name="mes" class="form-control" value="{{ $mes->format('Y-m') }}">
@@ -21,8 +22,21 @@
         href="{{ route('restaurantes.asistencias.mes', ['mes'=>$mes->copy()->subMonth()->format('Y-m')]) }}">&laquo; Mes anterior</a>
     <a class="btn btn-outline-secondary"
         href="{{ route('restaurantes.asistencias.mes', ['mes'=>$mes->copy()->addMonth()->format('Y-m')]) }}">Mes siguiente &raquo;</a>
+    <a class="btn btn-outline-success"
+        href="{{ route('restaurantes.asistencias.mes.export', ['mes'=>$mes->format('Y-m')]) }}">Exportar Excel (mes)</a>
     </div>
 </form>
+
+{{-- Acciones (POST) separadas para evitar anidamiento --}}
+<div class="mb-3 d-flex justify-content-end">
+  <form method="POST" action="{{ route('restaurantes.asistencias.cerrar-mes') }}"
+        onsubmit="return confirm('¿Cerrar todo el mes? Pendientes → inasistencia (no afecta festivos ni días futuros).');"
+        class="d-inline">
+      @csrf
+      <input type="hidden" name="mes" value="{{ $mes->format('Y-m') }}">
+      <button class="btn btn-outline-danger">Cerrar mes</button>
+  </form>
+</div>
 
 @if(isset($mensaje))<div class="alert alert-info">{{ $mensaje }}</div>@endif
 
@@ -34,6 +48,7 @@
         'asistio' => 'success',
         'inasistencia' => 'warning',
         'cancelado' => 'danger',
+        'festivo' => 'info',
         default => 'secondary',
     };
     @endphp
@@ -55,11 +70,17 @@
                 <span class="badge bg-dark">Total: {{ $sem['total'] }}</span>
             </div>
             </div>
-            <div>
-            <a class="btn btn-sm btn-outline-primary"
-                href="{{ route('restaurantes.asistencias.semana', ['lunes'=>$sem['lunes']->toDateString()]) }}">
-                Ver semana
-            </a>
+            <div class="d-flex gap-2">
+                <a class="btn btn-sm btn-outline-primary"
+                    href="{{ route('restaurantes.asistencias.semana', ['lunes'=>$sem['lunes']->toDateString()]) }}">
+                    Ver semana
+                </a>
+                <form method="POST" action="{{ route('restaurantes.asistencias.cerrar-semana') }}"
+                      onsubmit="return confirm('¿Cerrar esta semana? Pendientes → inasistencia (no afecta festivos ni días futuros).');">
+                    @csrf
+                    <input type="hidden" name="lunes" value="{{ $sem['lunes']->toDateString() }}">
+                    <button class="btn btn-sm btn-outline-danger">Cerrar semana</button>
+                </form>
             </div>
         </div>
         </div>

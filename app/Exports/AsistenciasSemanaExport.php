@@ -7,18 +7,24 @@ use Illuminate\Contracts\View\View;
 use Maatwebsite\Excel\Concerns\FromView;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
 use Maatwebsite\Excel\Concerns\WithEvents;
+use Maatwebsite\Excel\Concerns\WithTitle;
 use Maatwebsite\Excel\Events\AfterSheet;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 
-class AsistenciasSemanaExport implements FromView, ShouldAutoSize, WithEvents
+class AsistenciasSemanaExport implements FromView, ShouldAutoSize, WithEvents, WithTitle
 {
     public function __construct(
         public Carbon $lunes,
         public Carbon $rangIni,
         public Carbon $rangFin,
         public array $porSede,
-        public array $alumnos // nuevo
+        public array $alumnos
     ) {}
+
+    public function title(): string
+    {
+        return 'Semana '.$this->lunes->format('Y-m-d');
+    }
 
     public function view(): View
     {
@@ -37,17 +43,14 @@ class AsistenciasSemanaExport implements FromView, ShouldAutoSize, WithEvents
             AfterSheet::class => function (AfterSheet $event) {
                 $sheet = $event->sheet->getDelegate();
 
-                // Colores por estado
                 $colors = [
-                    'asistio'      => 'FF92D050', // verde
-                    'pendiente'    => 'FFF2F2F2', // gris claro
-                    'inasistencia' => 'FFFFC000', // ámbar
-                    'cancelado'    => 'FFFF9999', // rojo claro
+                    'asistio'      => 'FF92D050',
+                    'pendiente'    => 'FFF2F2F2',
+                    'inasistencia' => 'FFFFC000',
+                    'cancelado'    => 'FFFF9999',
+                    'festivo'      => 'FF17A2B8',
                 ];
 
-                // Suposición: las tablas de días están en las primeras 5 columnas (A..E).
-                // La tabla “Ficha de estudiantes” inicia más a la derecha o debajo,
-                // pero no contiene “(estado)”, así que no se verá afectada.
                 $firstColIndex = 1; // A
                 $lastColIndex  = 5; // E
                 $lastRow       = (int) $sheet->getHighestRow();
@@ -61,15 +64,11 @@ class AsistenciasSemanaExport implements FromView, ShouldAutoSize, WithEvents
                         $lower = mb_strtolower($value, 'UTF-8');
                         $match = null;
 
-                        if (str_contains($lower, '(asistio)')) {
-                            $match = 'asistio';
-                        } elseif (str_contains($lower, '(pendiente)')) {
-                            $match = 'pendiente';
-                        } elseif (str_contains($lower, '(inasistencia)')) {
-                            $match = 'inasistencia';
-                        } elseif (str_contains($lower, '(cancelado)')) {
-                            $match = 'cancelado';
-                        }
+                        if (str_contains($lower, '(asistio)'))      $match = 'asistio';
+                        elseif (str_contains($lower, '(pendiente)'))   $match = 'pendiente';
+                        elseif (str_contains($lower, '(inasistencia)'))$match = 'inasistencia';
+                        elseif (str_contains($lower, '(cancelado)'))   $match = 'cancelado';
+                        elseif (str_contains($lower, '(festivo)'))     $match = 'festivo';
 
                         if ($match && isset($colors[$match])) {
                             $style = $sheet->getStyleByColumnAndRow($col, $row);
@@ -80,7 +79,6 @@ class AsistenciasSemanaExport implements FromView, ShouldAutoSize, WithEvents
                     }
                 }
 
-                // Titulares en negrita
                 $sheet->getStyle('A1')->getFont()->setBold(true);
                 $sheet->getStyle('A2')->getFont()->setItalic(true);
             },

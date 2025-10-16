@@ -8,7 +8,7 @@
 
   <h3 class="mb-3">Asistencias por fecha</h3>
 
-  <form class="row g-2 mb-3" method="GET" action="{{ route('restaurantes.asistencias.fecha') }}">
+  <form class="row g-2 mb-2" method="GET" action="{{ route('restaurantes.asistencias.fecha') }}">
     <div class="col-12 col-sm-auto">
       <label class="form-label">Fecha</label>
       <input type="date" name="fecha" value="{{ $fecha->toDateString() }}" class="form-control">
@@ -22,12 +22,29 @@
     </div>
   </form>
 
+  <div class="mb-3">
+    <form method="POST" action="{{ route('restaurantes.asistencias.festivo') }}" class="d-inline-flex gap-2 flex-wrap">
+      @csrf
+      <input type="hidden" name="fecha" value="{{ $fecha->toDateString() }}">
+      @if(empty($esFestivoDia))
+        <input type="hidden" name="accion" value="marcar">
+        <input type="text" name="motivo" class="form-control form-control-sm" style="width: 220px" placeholder="Motivo (opcional)">
+        <button class="btn btn-sm btn-outline-primary">Marcar festivo</button>
+      @else
+        <input type="hidden" name="accion" value="quitar">
+        <button class="btn btn-sm btn-outline-secondary">Quitar festivo</button>
+      @endif
+    </form>
+  </div>
+
   @if(isset($mensaje))<div class="alert alert-info">{{ $mensaje }}</div>@endif
+  @if(!empty($esFestivoDia))
+    <div class="alert alert-primary py-2">Día festivo: no se prestó servicio.</div>
+  @endif
 
   @if($items->isEmpty())
     <div class="alert alert-warning">Sin registros.</div>
   @else
-    {{-- Escritorio: tabla --}}
     <div class="d-none d-sm-block">
       <div class="table-responsive">
         <table class="table table-sm align-middle">
@@ -37,7 +54,7 @@
               <th>Estudiante</th>
               <th>Correo</th>
               <th class="text-end">Estado</th>
-              @if($editable)<th class="text-end">Acciones</th>@endif
+              @if($editable && empty($esFestivoDia))<th class="text-end">Acciones</th>@endif
             </tr>
           </thead>
           <tbody>
@@ -45,32 +62,32 @@
               @php
                 $estado = $a->asistencia_estado ?? 'pendiente';
                 if ($estado==='no_show') $estado='inasistencia';
-                $badge = match($estado){ 'cancelado'=>'danger','asistio'=>'success','inasistencia'=>'warning', default=>'secondary' };
+                $badge = match($estado){ 'cancelado'=>'danger','asistio'=>'success','inasistencia'=>'warning','festivo'=>'info', default=>'secondary' };
               @endphp
               <tr>
                 <td>{{ ucfirst($a->cupo?->sede ?? '') }}</td>
                 <td>{{ $a->user?->name }}</td>
                 <td class="text-muted small">{{ $a->user?->email }}</td>
                 <td class="text-end"><span class="badge bg-{{ $badge }}">{{ $estado }}</span></td>
-                @if($editable)
-                <td class="text-end">
-                  @if($estado!=='cancelado')
-                    <form method="POST" action="{{ route('restaurantes.asistencias.marcar-fecha',$a) }}" class="d-inline">
-                      @csrf <input type="hidden" name="accion" value="asistio">
-                      <button class="btn btn-sm btn-success">Asistió</button>
-                    </form>
-                    <form method="POST" action="{{ route('restaurantes.asistencias.marcar-fecha',$a) }}" class="d-inline">
-                      @csrf <input type="hidden" name="accion" value="pendiente">
-                      <button class="btn btn-sm btn-outline-secondary">Pendiente</button>
-                    </form>
-                    <form method="POST" action="{{ route('restaurantes.asistencias.marcar-fecha',$a) }}" class="d-inline">
-                      @csrf <input type="hidden" name="accion" value="inasistencia">
-                      <button class="btn btn-sm btn-warning">Inasistencia</button>
-                    </form>
-                  @else
-                    <span class="text-muted small">No editable</span>
-                  @endif
-                </td>
+                @if($editable && empty($esFestivoDia))
+                  <td class="text-end">
+                    @if($estado!=='cancelado' && $estado!=='festivo')
+                      <form method="POST" action="{{ route('restaurantes.asistencias.marcar-fecha',$a) }}" class="d-inline">
+                        @csrf <input type="hidden" name="accion" value="asistio">
+                        <button class="btn btn-sm btn-success">Asistió</button>
+                      </form>
+                      <form method="POST" action="{{ route('restaurantes.asistencias.marcar-fecha',$a) }}" class="d-inline">
+                        @csrf <input type="hidden" name="accion" value="pendiente">
+                        <button class="btn btn-sm btn-outline-secondary">Pendiente</button>
+                      </form>
+                      <form method="POST" action="{{ route('restaurantes.asistencias.marcar-fecha',$a) }}" class="d-inline">
+                        @csrf <input type="hidden" name="accion" value="inasistencia">
+                        <button class="btn btn-sm btn-warning">Inasistencia</button>
+                      </form>
+                    @else
+                      <span class="text-muted small">No editable</span>
+                    @endif
+                  </td>
                 @endif
               </tr>
             @endforeach
@@ -79,14 +96,13 @@
       </div>
     </div>
 
-    {{-- Móvil: lista compacta con acciones --}}
     <div class="d-sm-none">
       <div class="list-group list-group-flush">
         @foreach($items as $a)
           @php
             $estado = $a->asistencia_estado ?? 'pendiente';
             if ($estado==='no_show') $estado='inasistencia';
-            $badge = match($estado){ 'cancelado'=>'danger','asistio'=>'success','inasistencia'=>'warning', default=>'secondary' };
+            $badge = match($estado){ 'cancelado'=>'danger','asistio'=>'success','inasistencia'=>'warning','festivo'=>'info', default=>'secondary' };
           @endphp
           <div class="list-group-item py-2">
             <div class="d-flex justify-content-between align-items-start gap-2">
@@ -97,7 +113,7 @@
               </div>
               <div class="text-end">
                 <div><span class="badge bg-{{ $badge }}">{{ $estado }}</span></div>
-                @if($editable && $estado!=='cancelado')
+                @if($editable && empty($esFestivoDia) && $estado!=='cancelado' && $estado!=='festivo')
                   <div class="mt-2">
                     <form method="POST" action="{{ route('restaurantes.asistencias.marcar-fecha',$a) }}" class="d-inline">
                       @csrf <input type="hidden" name="accion" value="asistio">

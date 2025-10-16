@@ -693,6 +693,12 @@ Route::middleware(['auth', 'checkrole:AdminBienestar'])->prefix('admin')->as('ad
     Route::get('/cupos/reporte', [\App\Http\Controllers\AdminCuposController::class, 'reporteSemana'])
         ->name('cupos.reporte-semana');
 
+    Route::get('/asistencias/semanal/export', [\App\Http\Controllers\AdminAsistenciasController::class,'exportSemanalExcel'])
+            ->name('asistencias.semanal.export');
+
+    Route::get('/asistencias/mensual/export', [\App\Http\Controllers\AdminAsistenciasController::class,'exportMensualExcel'])
+        ->name('asistencias.mensual.export');;
+
 
     
     // NUEVO: flujo semanal
@@ -791,27 +797,33 @@ Route::middleware(['auth','checkrole:Estudiante'])
     });
 
 // PWA RESTAURANTE
+// PWA RESTAURANTE
 Route::middleware(['auth','checkrole:Restaurante'])
-    ->prefix('app/restaurantes')
-    ->group(function () {
-        Route::get('/', [RestaurantesDashboardController::class,'index'])->name('restaurantes.dashboard');
-        Route::post('/contexto', [RestaurantesDashboardController::class,'setContext'])->name('restaurantes.context.set');
-
+    ->prefix('app/restaurantes')->group(function () {
+        Route::get('/', [\App\Http\Controllers\PWA\Restaurantes\RestaurantesDashboardController::class,'index'])->name('restaurantes.dashboard');
+        Route::post('/contexto', [\App\Http\Controllers\PWA\Restaurantes\RestaurantesDashboardController::class,'setContext'])->name('restaurantes.context.set');
+        // Hoy y marcado
         Route::get('/asistencias', [AsistenciasController::class,'hoy'])->name('restaurantes.asistencias.hoy');
         Route::post('/asistencias/{asignacion}/marcar', [AsistenciasController::class,'marcar'])->name('restaurantes.asistencias.marcar');
 
+        // Por fecha (histórico)
         Route::get('/asistencias/fecha', [AsistenciasController::class,'fecha'])->name('restaurantes.asistencias.fecha');
-        Route::post('/asistencias/{asignacion}/marcar-fecha', [\App\Http\Controllers\PWA\Restaurantes\AsistenciasController::class,'marcarFecha'])
-            ->name('restaurantes.asistencias.marcar-fecha');
+        Route::post('/asistencias/{asignacion}/marcar-fecha', [AsistenciasController::class,'marcarFecha'])->name('restaurantes.asistencias.marcar-fecha');
 
+        // Semana (vista y export)
         Route::get('/asistencias/semana', [AsistenciasController::class,'semana'])->name('restaurantes.asistencias.semana');
         Route::get('/asistencias/semana/export', [AsistenciasController::class,'exportSemana'])->name('restaurantes.asistencias.semana.export');
 
-        // NUEVO: asistencias del mes (vista mensual con semanas y link "Ver semana")
-        Route::get('/asistencias/mes', [AsistenciasController::class,'mes'])
-            ->name('restaurantes.asistencias.mes');
+        // Mes (vista y export)
+        Route::get('/asistencias/mes', [AsistenciasController::class,'mes'])->name('restaurantes.asistencias.mes');
+        Route::get('/asistencias/mes/export', [AsistenciasController::class,'exportMes'])->name('restaurantes.asistencias.mes.export');
+
+        // Cierres (faltaban estas dos rutas)
         Route::post('/asistencias/cerrar-dia', [AsistenciasController::class,'cerrarDia'])->name('restaurantes.asistencias.cerrar-dia');
+        Route::post('/asistencias/cerrar-semana', [AsistenciasController::class,'cerrarSemana'])->name('restaurantes.asistencias.cerrar-semana');
+        Route::post('/asistencias/cerrar-mes', [AsistenciasController::class,'cerrarMes'])->name('restaurantes.asistencias.cerrar-mes');
+
+        // Festivos
+        Route::post('/asistencias/festivo', [AsistenciasController::class,'marcarFestivo'])->name('restaurantes.asistencias.festivo');
     });
-
-
-
+    

@@ -15,21 +15,21 @@
     .dash-menu li:hover, .dash-menu li.active { background:#b10024; border-left-color:#fff; }
     .dash-main { flex:1; background:#f8f9fa; padding:28px; overflow-y:auto; -webkit-overflow-scrolling:touch; min-width:0; }
 
-    .kpis { display:grid; grid-template-columns: repeat(4, minmax(160px, 1fr)); gap:16px; margin-bottom:18px; }
+    .kpis { display:grid; grid-template-columns: repeat(5, minmax(140px, 1fr)); gap:16px; margin-bottom:18px; }
     .kpi { background:#fff; border-radius:10px; box-shadow:0 2px 8px #0001; padding:16px; }
     .kpi h6 { margin:0 0 6px; color:#666; font-weight:600; }
     .kpi .val { font-size:1.6rem; font-weight:800; }
 
     .card { box-shadow:0 2px 8px #0001; }
-    .chart-wrap { height: 360px; }  /* misma altura para ambos gráficos */
-    .chart-wrap canvas { height:100% !important; } /* Chart.js toma alto del contenedor */
+    .chart-wrap { height: 360px; }
+    .chart-wrap canvas { height:100% !important; }
 
     .table-mov { width:100%; border-collapse:collapse; }
     .table-mov th, .table-mov td { border:1px solid #e5e5e5; padding:10px; }
     .table-mov th { background:#222; color:#fff; }
     .pinned { color:var(--uv-rojo); margin-right:6px; }
 
-    @media (max-width: 1200px){ .kpis{ grid-template-columns: repeat(2, 1fr);} .chart-wrap{ height:300px; } }
+    @media (max-width: 1200px){ .kpis{ grid-template-columns: repeat(3, 1fr);} .chart-wrap{ height:300px; } }
     @media (max-width: 768px) { .dashboard-shell { top: calc(var(--nav-h) + 48px); } .dash-sidebar { position:absolute; height:100%; z-index:2; } .dash-main { padding:16px; } .chart-wrap{ height:260px; } }
 </style>
 
@@ -39,7 +39,7 @@
     use App\Models\ConvocatoriaSubsidio;
 
     $nombreCompleto = auth()->user()->name;
-    $primerNombre = explode(' ', $nombreCompleto)[0];
+    $primerNombre = explode(' ', trim((string)$nombreCompleto))[0] ?: '';
     $primerNombreMayuscula = ucfirst(strtolower($primerNombre));
 
     $tz = config('subsidio.timezone', 'America/Bogota');
@@ -57,13 +57,18 @@
     $items = CupoAsignacion::with(['user','cupo'])
         ->whereHas('cupo', function($q) use ($desde, $hasta, $sede, $convocatoriaId) {
             $q->whereBetween('fecha', [$desde->toDateString(), $hasta->toDateString()])
-              ->whereRaw('WEEKDAY(fecha) <= 4'); // L–V
+              ->whereRaw('WEEKDAY(fecha) <= 4');
             if ($sede) $q->where('sede', $sede);
             if ($convocatoriaId) $q->where('convocatoria_id', $convocatoriaId);
         })
         ->get();
 
-    $normEstado = fn($e)=> $e === 'no_show' ? 'inasistencia' : ($e ?: 'pendiente');
+    // Estado UI (incluye festivo)
+    $estadoUi = function($a) {
+        if ($a->cupo?->es_festivo) return 'festivo';
+        $e = $a->asistencia_estado ?? 'pendiente';
+        return $e === 'no_show' ? 'inasistencia' : ($e ?: 'pendiente');
+    };
 
     // Labels L–V en el rango
     $labels = [];
@@ -71,33 +76,54 @@
         if (in_array($d->dayOfWeekIso, [1,2,3,4,5], true)) $labels[] = $d->toDateString();
     }
 
-    // Conteos diarios por estado
-    $estados = ['pendiente','cancelado','asistio','inasistencia'];
+    // Conteos diarios por estado (incluye festivo)
     $daily = [];
-    foreach ($labels as $lbl) $daily[$lbl] = ['pendiente'=>0,'cancelado'=>0,'asistio'=>0,'inasistencia'=>0];
+    foreach ($labels as $lbl) {
+        $daily[$lbl] = ['pendiente'=>0,'cancelado'=>0,'asistio'=>0,'inasistencia'=>0,'festivo'=>0];
+    }
     foreach ($items as $a) {
         $f = optional($a->cupo?->fecha)?->toDateString();
         if (!$f || !isset($daily[$f])) continue;
-        $e = $normEstado($a->asistencia_estado ?? 'pendiente');
+        $e = $estadoUi($a);
         $daily[$f][$e] = ($daily[$f][$e] ?? 0) + 1;
     }
 
-    // Totales (KPIs y doughnut)
-    $totales = ['pendiente'=>0,'cancelado'=>0,'asistio'=>0,'inasistencia'=>0];
+    // Añadir días festivos aunque no haya asignaciones (fix con where('es_festivo', 1))
+    $festivoDias = CupoDiario::query()
+        ->when($sede, fn($q)=>$q->where('sede',$sede))
+        ->when($convocatoriaId, fn($q)=>$q->where('convocatoria_id',$convocatoriaId))
+        ->whereBetween('fecha', [$desde->toDateString(), $hasta->toDateString()])
+        ->whereRaw('WEEKDAY(fecha) BETWEEN 0 AND 4')
+        ->where('es_festivo', 1)
+        ->pluck('fecha')
+        ->map(fn($f)=> \Carbon\Carbon::parse($f, $tz)->toDateString())
+        ->unique()
+        ->values();
+
+    foreach ($festivoDias as $fd) {
+        if (isset($daily[$fd]) && ($daily[$fd]['festivo'] ?? 0) === 0) {
+            $daily[$fd]['festivo'] = 1; // indicador de festivo en el día
+        }
+    }
+
+    // Totales
+    $totales = ['pendiente'=>0,'cancelado'=>0,'asistio'=>0,'inasistencia'=>0,'festivo'=>0];
     foreach ($daily as $byDay) foreach ($byDay as $k=>$v) $totales[$k] += $v;
     $kpiTotal   = array_sum($totales);
     $kpiAsistio = $totales['asistio'];
     $kpiCancel  = $totales['cancelado'];
     $kpiInasis  = $totales['inasistencia'];
+    $kpiFestivo = $totales['festivo'];
 
     // Datos Chart.js
     $chartLabels = $labels;
-    $chartPend   = array_map(fn($f)=> $daily[$f]['pendiente'] ?? 0, $labels);
-    $chartCanc   = array_map(fn($f)=> $daily[$f]['cancelado'] ?? 0, $labels);
-    $chartAsis   = array_map(fn($f)=> $daily[$f]['asistio'] ?? 0, $labels);
-    $chartInas   = array_map(fn($f)=> $daily[$f]['inasistencia'] ?? 0, $labels);
+    $chartPend   = array_map(fn($f)=> $daily[$f]['pendiente']   ?? 0, $labels);
+    $chartCanc   = array_map(fn($f)=> $daily[$f]['cancelado']   ?? 0, $labels);
+    $chartAsis   = array_map(fn($f)=> $daily[$f]['asistio']     ?? 0, $labels);
+    $chartInas   = array_map(fn($f)=> $daily[$f]['inasistencia']?? 0, $labels);
+    $chartFest   = array_map(fn($f)=> $daily[$f]['festivo']     ?? 0, $labels);
 
-    // Resumen de HOY por sede (para la tabla inferior)
+    // Resumen de HOY por sede
     $hoy = now($tz)->toDateString();
     $hoyItems = CupoAsignacion::with('cupo')
         ->whereHas('cupo', fn($q)=> $q->whereDate('fecha', $hoy))
@@ -114,17 +140,27 @@
             'total'       => $col->count(),
         ];
     }
+    $esFestivoHoy = CupoDiario::query()
+        ->when($sede, fn($q)=>$q->where('sede',$sede))
+        ->when($convocatoriaId, fn($q)=>$q->where('convocatoria_id',$convocatoriaId))
+        ->whereDate('fecha', $hoy)
+        ->where('es_festivo', 1)
+        ->exists();
 
-    // Cancelaciones recientes (últimos 10 según filtros del rango)
-    $cancelRecientes = CupoAsignacion::with(['user','cupo'])
-        ->where('asistencia_estado','cancelado')
-        ->whereHas('cupo', function($q) use ($desde, $hasta, $sede, $convocatoriaId) {
-            $q->whereBetween('fecha', [$desde->toDateString(), $hasta->toDateString()]);
-            if ($sede) $q->where('sede', $sede);
-            if ($convocatoriaId) $q->where('convocatoria_id', $convocatoriaId);
-        })
-        ->orderByDesc(CupoDiario::select('fecha')->whereColumn('subsidio_cupos_diarios.id','subsidio_cupo_asignaciones.cupo_diario_id'))
-        ->limit(10)->get();
+    // Cancelaciones recientes (fallback seguro por si algo falla)
+    try {
+        $cancelRecientes = CupoAsignacion::with(['user','cupo'])
+            ->where('asistencia_estado','cancelado')
+            ->whereHas('cupo', function($q) use ($desde, $hasta, $sede, $convocatoriaId) {
+                $q->whereBetween('fecha', [$desde->toDateString(), $hasta->toDateString()]);
+                if ($sede) $q->where('sede', $sede);
+                if ($convocatoriaId) $q->where('convocatoria_id', $convocatoriaId);
+            })
+            ->orderByDesc(CupoDiario::select('fecha')->whereColumn('subsidio_cupos_diarios.id','subsidio_cupo_asignaciones.cupo_diario_id'))
+            ->limit(10)->get();
+    } catch (\Throwable $e) {
+        $cancelRecientes = collect();
+    }
 @endphp
 
 <div class="dashboard-shell" id="dashShell">
@@ -139,7 +175,6 @@
             <li><a href="{{ route('admin.asistencias.index') }}">Asistencias</a></li>
             <li><a href="{{ route('admin.asistencias.cancelaciones') }}">Cancelaciones</a></li>
             <li><a href="{{ \Illuminate\Support\Facades\Route::has('admin.reportes') ? route('admin.reportes') : '#' }}">PQR's</a></li>
-            
         </ul>
     </aside>
 
@@ -148,6 +183,9 @@
         <p class="text-muted mb-3">
             Aquí verás un resumen visual de las asistencias del período seleccionado. Ajusta los filtros para
             enfocarte por sede o convocatoria. Las estadísticas consideran únicamente días hábiles (lunes a viernes).
+            @if($kpiFestivo > 0)
+                <br><span class="badge text-bg-info mt-2">Nota: Festivo contabiliza 1 por día con servicio suspendido</span>
+            @endif
         </p>
 
         {{-- Filtros --}}
@@ -188,9 +226,10 @@
             <div class="kpi"><h6>Asistió</h6><div class="val text-success">{{ $kpiAsistio }}</div></div>
             <div class="kpi"><h6>Cancelado</h6><div class="val text-danger">{{ $kpiCancel }}</div></div>
             <div class="kpi"><h6>Inasistencia</h6><div class="val text-warning">{{ $kpiInasis }}</div></div>
+            <div class="kpi"><h6>Festivo</h6><div class="val text-info">{{ $kpiFestivo }}</div></div>
         </div>
 
-        {{-- Gráficos ordenados y alineados --}}
+        {{-- Gráficos --}}
         <div class="row g-3 mb-4">
             <div class="col-lg-8">
                 <div class="card h-100">
@@ -210,7 +249,12 @@
             </div>
         </div>
 
-        {{-- Tablas debajo de los gráficos --}}
+        {{-- Alerta si hoy es festivo --}}
+        @if($esFestivoHoy)
+            <div class="alert alert-info py-2">Día festivo: no se prestó servicio hoy.</div>
+        @endif
+
+        {{-- Resumen HOY --}}
         <h5 class="mb-2"><span class="pinned">★</span>Resumen de asistencias de hoy ({{ $hoy }})</h5>
         <div class="table-responsive mb-4">
             <table class="table-mov">
@@ -252,7 +296,7 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @forelse($cancelRecientes as $a)
+                    @forelse(($cancelRecientes ?? collect()) as $a)
                         <tr>
                             <td>{{ optional($a->cupo?->fecha)?->toDateString() }}</td>
                             <td>{{ ucfirst($a->cupo?->sede ?? '') }}</td>
@@ -278,6 +322,7 @@
     const dataCanc = @json($chartCanc);
     const dataAsis = @json($chartAsis);
     const dataInas = @json($chartInas);
+    const dataFest = @json($chartFest);
 
     // Barras apiladas
     const ctx1 = document.getElementById('chartDaily');
@@ -287,10 +332,11 @@
             data: {
                 labels,
                 datasets: [
-                    { label: 'Pendiente',    data: dataPend, backgroundColor: '#6c757d' },
-                    { label: 'Cancelado',    data: dataCanc, backgroundColor: '#dc3545' },
-                    { label: 'Asistió',      data: dataAsis, backgroundColor: '#198754' },
-                    { label: 'Inasistencia', data: dataInas, backgroundColor: '#fd7e14' },
+                    { label: 'Pendiente',    data: dataPend, backgroundColor: '#6c757d', stack:'stack' },
+                    { label: 'Cancelado',    data: dataCanc, backgroundColor: '#dc3545', stack:'stack' },
+                    { label: 'Asistió',      data: dataAsis, backgroundColor: '#198754', stack:'stack' },
+                    { label: 'Inasistencia', data: dataInas, backgroundColor: '#fd7e14', stack:'stack' },
+                    { label: 'Festivo',      data: dataFest, backgroundColor: '#17a2b8', stack:'stack' },
                 ]
             },
             options: {
@@ -307,16 +353,17 @@
     const totalCanc = dataCanc.reduce((a,b)=>a+b,0);
     const totalAsis = dataAsis.reduce((a,b)=>a+b,0);
     const totalInas = dataInas.reduce((a,b)=>a+b,0);
+    const totalFest = dataFest.reduce((a,b)=>a+b,0);
 
     const ctx2 = document.getElementById('chartPie');
     if (ctx2) {
         new Chart(ctx2, {
             type: 'doughnut',
             data: {
-                labels: ['Pendiente','Cancelado','Asistió','Inasistencia'],
+                labels: ['Pendiente','Cancelado','Asistió','Inasistencia','Festivo'],
                 datasets: [{
-                    data: [totalPend,totalCanc,totalAsis,totalInas],
-                    backgroundColor: ['#6c757d','#dc3545','#198754','#fd7e14']
+                    data: [totalPend,totalCanc,totalAsis,totalInas,totalFest],
+                    backgroundColor: ['#6c757d','#dc3545','#198754','#fd7e14','#17a2b8']
                 }]
             },
             options: {

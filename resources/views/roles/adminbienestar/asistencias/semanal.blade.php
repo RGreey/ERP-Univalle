@@ -30,6 +30,14 @@
     <div class="col-auto align-self-end">
     <button class="btn btn-primary">Filtrar</button>
     </div>
+    <div class="col-auto align-self-end">
+    <a class="btn btn-outline-success"
+       href="{{ route('admin.asistencias.semanal.export', [
+            'lunes'=>$lunes->toDateString(),
+            'sede'=>$sede,
+            'convocatoria_id'=>($convocatoriaId ?? null)
+       ]) }}">Exportar Excel</a>
+    </div>
 </form>
 
 <p class="text-muted">Semana {{ $lunes->format('Y-m-d') }} al {{ $domingo->format('Y-m-d') }} (solo L–V)</p>
@@ -62,6 +70,7 @@
                 'asistio'     => 'success',
                 'inasistencia'=> 'warning',
                 'pendiente'   => 'secondary',
+                'festivo'     => 'info',
                 default       => null
                 };
             @endphp
