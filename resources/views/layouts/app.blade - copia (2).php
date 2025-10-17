@@ -1,3 +1,4 @@
+<!-- resources/views/layouts/app.blade.php -->
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -12,7 +13,8 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
     <style>
-        .navbar-custom { background-color: #cd1f32; }
+        /* Ajustes visuales del navbar para que no se vea "punto" ni desalineado */
+        .navbar-custom { background-color: #cd1f32; } /* Rojo Univalle */
         .navbar-custom .navbar-brand,
         .navbar-custom .nav-link,
         .navbar-custom .dropdown-toggle { color: #ffffff !important; }
@@ -21,25 +23,72 @@
         .navbar-custom .dropdown-menu { border: 0; box-shadow: 0 10px 20px rgba(0,0,0,0.08); }
         .navbar-custom .navbar-toggler { border-color: rgba(255,255,255,.2); }
         .navbar-custom .navbar-toggler-icon { filter: invert(1) grayscale(1); }
+        /* Asegura que los items del navbar no tengan viñeta en ningún caso */
         .navbar-nav > .nav-item { list-style: none; }
+        /* Botón de engranaje (menú usuario) */
         .navbar-custom .btn.btn-light { background: #fff; color: #000; }
+        /* Espaciado consistente entre items */
         .navbar-nav .nav-link { padding: .5rem .75rem; }
     </style>
 
-    {{-- PWA Restaurantes solo si el usuario tiene ese rol --}}
+    {{-- CSS específico para la PWA de Restaurantes (solo si el usuario tiene ese rol) --}}
     @php
         $u = auth()->user();
         $esRestauranteHead = $u && method_exists($u,'hasRole') ? $u->hasRole('Restaurante') : false;
     @endphp
     @if($esRestauranteHead)
-        <link rel="stylesheet" href="{{ asset('css/pwa-restaurante.css') }}">
+        <link rel="stylesheet" href="{{ asset('css/pwa-restaurante.css') }}"><!-- OJO: singular -->
         <link rel="manifest" href="/restaurantes/manifest.json">
         <meta name="theme-color" content="#cd1f32">
         <link rel="apple-touch-icon" href="/restaurantes/icons/icon-192.png">
     @endif
 </head>
-<body @if(auth()->check() && method_exists(auth()->user(),'hasRole') && auth()->user()->hasRole('Restaurante')) data-role="restaurante" @endif>
+    @if($esRestauranteHead)
+    <div id="pwa-install-box" class="position-fixed bottom-0 end-0 p-3" style="z-index:1050; display:none;">
+        <button id="pwa-install-btn" class="btn btn-primary btn-sm">
+        Instalar Restaurantes
+        </button>
+    </div>
+    @endif
+    @if($esRestauranteHead)
+    <script>
+    if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/app/sw-restaurantes.js', { scope: '/app/restaurantes/' })
+        .then(reg => console.log('SW Restaurantes registrado:', reg.scope))
+        .catch(err => console.error('SW Restaurantes error:', err));
+    });
+    }
 
+    // Lógica del botón "Instalar"
+    let deferredPrompt = null;
+    const box = document.getElementById('pwa-install-box');
+    const btn = document.getElementById('pwa-install-btn');
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+        // Evitamos el mini-infobar y guardamos el evento
+        e.preventDefault();
+        deferredPrompt = e;
+        if (box) box.style.display = 'block';
+        console.log('beforeinstallprompt listo');
+    });
+
+    btn && btn.addEventListener('click', async () => {
+        if (!deferredPrompt) return;
+        deferredPrompt.prompt(); // Muestra el diálogo nativo
+        const { outcome } = await deferredPrompt.userChoice;
+        console.log('Instalación:', outcome);
+        deferredPrompt = null;
+        if (box) box.style.display = 'none';
+    });
+
+    window.addEventListener('appinstalled', () => {
+        console.log('PWA instalada');
+        if (box) box.style.display = 'none';
+    });
+    </script>
+    @endif
+<body @if(auth()->check() && method_exists(auth()->user(),'hasRole') && auth()->user()->hasRole('Restaurante')) data-role="restaurante" @endif>
 <form id="logout-form" action="{{ route('logout') }}" method="POST" class="d-none">
     @csrf
 </form>
@@ -76,7 +125,7 @@
                         <a class="nav-link" href="{{ route('restaurantes.dashboard') }}">
                             Gestión del restaurante
                         </a>
-                    </li>
+                    </li>    
                 @else
                     <li class="nav-item">
                         <a class="nav-link" href="{{ route('dashboard') }}">Inicio</a>
@@ -112,6 +161,7 @@
 
                             @if(auth()->user()->hasRole('Profesor') || auth()->user()->hasRole('Administrativo'))
                                 @php
+                                    // Usar helper centralizado con ajuste 00:00 → día siguiente
                                     $convActiva = \App\Helpers\ConvocatoriaHelper::obtenerConvocatoriaActiva();
                                     $mostrarEntrevistas = false;
                                     if ($convActiva) {
@@ -134,6 +184,8 @@
                                     $monitorsActivosEst = $monitorsActuales->filter(function($m) use ($hoyEst) {
                                         return !$m->fecha_culminacion || \Carbon\Carbon::parse($m->fecha_culminacion)->gte($hoyEst);
                                     });
+
+                                    // Verificar si el estudiante puede acceder al seguimiento (después de fecha de entrevista)
                                     $puedeAccederSeguimiento = true;
                                     if ($monitorsActivosEst->count() > 0) {
                                         $monitoria = \App\Models\Monitoria::find($monitorsActivosEst->first()->monitoria);
@@ -192,6 +244,38 @@
                         </li>
                     @endif
 
+                    @if(auth()->check() && auth()->user()->hasRole('Estudiante'))
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="subsidioDropdown"
+                            role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <span>Subsidio Alimenticio</span>
+                                @isset($subsidioConvocatoriasCount)
+                                    @if($subsidioConvocatoriasCount > 0)
+                                        <span class="badge bg-success ms-2">{{ $subsidioConvocatoriasCount }}</span>
+                                    @endif
+                                @endisset
+                            </a>
+
+                            <ul class="dropdown-menu" aria-labelledby="subsidioDropdown">
+                                <li>
+                                    <a class="dropdown-item" href="{{ route('subsidio.convocatorias.index') }}">
+                                        Postulaciones
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="{{ route('app.subsidio.mis-cupos') }}">
+                                        Cupos
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="{{ route('app.subsidio.reportes.index') }}">
+                                        Reportes
+                                    </a>
+                                </li>
+                            </ul>
+                        </li>
+                    @endif
+
                     <li class="nav-item">
                         <a class="nav-link" href="{{ route('calendario') }}">
                             Calendario <i class="fa-regular fa-calendar"></i>
@@ -228,66 +312,12 @@
     @yield('content')
 </div>
 
-{{-- Botón flotante de instalación (dentro del body) --}}
-@if($esRestaurante)
-  <div id="pwa-install-box" class="position-fixed bottom-0 end-0 p-3" style="z-index:1050; display:none;">
-    <button id="pwa-install-btn" class="btn btn-primary btn-sm">Instalar Restaurantes</button>
-  </div>
-@endif
-
 <!-- Scripts -->
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.min.js"></script>
 <script src="https://cdn.datatables.net/1.11.5/js/dataTables.bootstrap5.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-
-{{-- PWA: registrar SW y manejar instalación (al final, con DOM ya listo) --}}
-@if($esRestaurante)
-<script>
-(function() {
-  // Registrar SW
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/app/sw-restaurantes.js', { scope: '/app/restaurantes/' })
-        .then(reg => console.log('SW Restaurantes registrado:', reg.scope))
-        .catch(err => console.error('SW Restaurantes error:', err));
-    });
-  }
-
-  // Instalar app
-  let deferredPrompt = null;
-  const box = document.getElementById('pwa-install-box');
-  const btn = document.getElementById('pwa-install-btn');
-
-  // Ocultar si ya está en modo standalone (instalada)
-  const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
-  if (isStandalone && box) box.style.display = 'none';
-
-  window.addEventListener('beforeinstallprompt', (e) => {
-    e.preventDefault();
-    deferredPrompt = e;
-    if (box) box.style.display = 'block';
-    console.log('beforeinstallprompt listo');
-  });
-
-  btn && btn.addEventListener('click', async () => {
-    if (!deferredPrompt) return;
-    deferredPrompt.prompt();
-    const choice = await deferredPrompt.userChoice;
-    console.log('Instalación:', choice?.outcome);
-    deferredPrompt = null;
-    if (box) box.style.display = 'none';
-  });
-
-  window.addEventListener('appinstalled', () => {
-    console.log('PWA instalada');
-    if (box) box.style.display = 'none';
-  });
-})();
-</script>
-@endif
-
 @stack('scripts')
 </body>
 </html>
