@@ -801,6 +801,10 @@ Route::middleware(['auth','checkrole:Estudiante'])
     });
 
 // PWA RESTAURANTE
+// DIAGNÓSTICO TEMPORAL — BORRAR AL FINAL
+Route::get('/app/restaurantes', function () {
+    return 'ok /app/restaurantes sin middleware';
+});
 // PWA RESTAURANTE
 Route::middleware(['auth','checkrole:Restaurante'])
     ->prefix('app/restaurantes')->group(function () {
@@ -831,3 +835,10 @@ Route::middleware(['auth','checkrole:Restaurante'])
         Route::post('/asistencias/festivo', [AsistenciasController::class,'marcarFestivo'])->name('restaurantes.asistencias.festivo');
     });
     
+
+
+
+// DIAGNÓSTICO TEMPORAL — BORRAR AL FINAL
+Route::get('/app/test', function () {
+    return 'ok /app/test está vivo';
+});

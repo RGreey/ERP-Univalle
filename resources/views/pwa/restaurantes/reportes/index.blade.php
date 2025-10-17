@@ -2,7 +2,6 @@
 @section('title','Reportes (Restaurante)')
 
 @push('head')
-<link rel="manifest" href="/restaurante/manifest.webmanifest">
 <meta name="theme-color" content="#cd1f32">
 @endpush
 
