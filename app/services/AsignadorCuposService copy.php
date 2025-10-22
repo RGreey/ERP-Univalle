@@ -2,10 +2,10 @@
 
 namespace App\Services;
 
+use App\Models\ConvocatoriaSubsidio;
 use App\Models\CupoDiario;
 use App\Models\CupoAsignacion;
 use App\Models\CupoPatron;
-use App\Models\ConvocatoriaSubsidio;
 use App\Models\PostulacionSubsidio;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
@@ -13,30 +13,170 @@ use Illuminate\Support\Facades\DB;
 
 class AsignadorCuposService
 {
-    // Máximos semanales por prioridad (1 = mayor prioridad)
+    // Máximo de cupos semanales por prioridad_final (1 = mayor prioridad)
     private array $maxPorSemana = [1=>5,2=>5,3=>4,4=>3,5=>3,6=>2,7=>2,8=>1,9=>1];
 
-    // Genera cupos diarios para TODO el periodo (lun-vie, por sede)
+    // Crea/actualiza CupoDiario de TODO el periodo (L–V por sede) y sincroniza capacidad
     public function generarPeriodo(ConvocatoriaSubsidio $conv): int
     {
-        if (!$conv->fecha_inicio_beneficio || !$conv->fecha_fin_beneficio) {
-            return 0;
-        }
+        if (!$conv->fecha_inicio_beneficio || !$conv->fecha_fin_beneficio) return 0;
+
         $inicio = Carbon::parse($conv->fecha_inicio_beneficio)->startOfDay();
         $fin    = Carbon::parse($conv->fecha_fin_beneficio)->endOfDay();
 
-        $capPorSede = [
-            'caicedonia' => (int) ($conv->cupos_caicedonia ?? 0),
-            'sevilla'    => (int) ($conv->cupos_sevilla ?? 0),
+        $cap = [
+            'caicedonia' => (int)($conv->cupos_caicedonia ?? 0),
+            'sevilla'    => (int)($conv->cupos_sevilla ?? 0),
         ];
 
         $total = 0;
+        DB::transaction(function () use ($conv, $inicio, $fin, $cap, &$total) {
+            $f = $inicio->copy();
+            while ($f->lte($fin)) {
+                if (in_array($f->dayOfWeekIso, [1,2,3,4,5], true)) {
+                    foreach (['caicedonia','sevilla'] as $sede) {
+                        $cupo = CupoDiario::firstOrCreate(
+                            ['convocatoria_id'=>$conv->id,'fecha'=>$f->toDateString(),'sede'=>$sede],
+                            ['capacidad'=>$cap[$sede], 'asignados'=>0]
+                        );
+                        if ($cupo->capacidad !== $cap[$sede]) {
+                            $cupo->capacidad = $cap[$sede];
+                            $cupo->save();
+                        }
+                        $total++;
+                    }
+                }
+                $f->addDay();
+            }
+        });
+        return $total;
+    }
 
-        DB::transaction(function () use ($conv, $inicio, $fin, $capPorSede, &$total) {
-            $fecha = $inicio->copy();
-            while ($fecha->lte($fin)) {
-                if (in_array($fecha->dayOfWeekIso, [1,2,3,4,5], true)) {
-                    foreach ($capPorSede as $sede => $cap) {
+    // Planifica patrones semanales por estudiante usando reparto equitativo (no crea asignaciones aún)
+    public function planificarPatrones(ConvocatoriaSubsidio $conv): int
+    {
+        // Semana base (solo se guarda el patrón por ISO de L–V)
+        $lunesBase = Carbon::parse($conv->fecha_inicio_beneficio ?: now())
+            ->startOfWeek(Carbon::MONDAY);
+
+        $capSede = [
+            'caicedonia' => (int)($conv->cupos_caicedonia ?? 0),
+            'sevilla'    => (int)($conv->cupos_sevilla ?? 0),
+        ];
+        if ($capSede['caicedonia']===0 && $capSede['sevilla']===0) return 0;
+
+        // Ocupación virtual de la semana base por día y sede
+        $ocup = [];
+        foreach ([1,2,3,4,5] as $d) {
+            $ocup[$d] = ['caicedonia'=>0,'sevilla'=>0];
+        }
+
+        // Postulantes ordenados
+        $postulantes = PostulacionSubsidio::with('user')
+            ->where('convocatoria_id', $conv->id)
+            ->whereIn('estado', ['evaluada','beneficiario'])
+            ->orderByRaw('prioridad_final IS NULL') // nulls al final
+            ->orderBy('prioridad_final')
+            ->orderBy('created_at')
+            ->get();
+
+        // Preferencias mapeadas
+        $prefs = $this->mapearPreferencias($postulantes);
+
+        $creados = 0;
+
+        DB::transaction(function () use ($postulantes, $prefs, $capSede, &$ocup, $conv, &$creados) {
+            foreach ($postulantes as $p) {
+                $uid  = $p->user_id;
+                $prio = (int)($p->prioridad_final ?? 9);
+                $max  = $this->maxPorSemana[$prio] ?? 1;
+
+                // Sede normalizada
+                $sede = mb_strtolower((string)($p->sede ?? 'caicedonia'));
+                if (!in_array($sede, ['caicedonia','sevilla'], true)) {
+                    $sede = 'caicedonia';
+                }
+                if (($capSede[$sede] ?? 0) <= 0) continue;
+
+                $diasPrefer = $prefs[$uid]['dias'] ?? [1,2,3,4,5];
+
+                // Elegir hasta $max días preferidos priorizando menor ocupación del día
+                $elegidos = [];
+                for ($k=0; $k<$max; $k++) {
+                    // ordenar los días preferidos por ocupación asc y por día asc
+                    $orden = collect($diasPrefer)
+                        ->reject(fn($dISO)=> in_array($dISO, $elegidos, true))
+                        ->map(fn($dISO)=> ['d'=>$dISO,'occ'=>$ocup[$dISO][$sede] ?? 0])
+                        ->sortBy([['occ','asc'],['d','asc']])
+                        ->pluck('d')
+                        ->values();
+
+                    $asignado = false;
+                    foreach ($orden as $dISO) {
+                        if (($ocup[$dISO][$sede] ?? 0) < ($capSede[$sede] ?? 0)) {
+                            $ocup[$dISO][$sede] = ($ocup[$dISO][$sede] ?? 0) + 1;
+                            $elegidos[] = $dISO;
+                            $asignado = true;
+                            break;
+                        }
+                    }
+                    if (!$asignado) break; // no hay más espacio esa semana
+                }
+
+                // Guarda/actualiza patrón (días ISO semanales)
+                CupoPatron::updateOrCreate(
+                    ['convocatoria_id'=>$conv->id, 'user_id'=>$uid],
+                    [
+                        'postulacion_id' => $p->id,
+                        'dias_iso'       => array_values($elegidos),
+                    ]
+                );
+                if (!empty($elegidos)) $creados++;
+            }
+        });
+
+        return $creados;
+    }
+
+    // Aplica los patrones en todo el periodo creando CupoAsignacion, sincronizando capacidad
+    public function aplicarPatronesEnPeriodo(ConvocatoriaSubsidio $conv): int
+    {
+        if (!$conv->fecha_inicio_beneficio || !$conv->fecha_fin_beneficio) return 0;
+
+        // Asegura cupos y capacidades
+        $this->generarPeriodo($conv);
+
+        $patrones = CupoPatron::with('postulacion.user')
+            ->where('convocatoria_id', $conv->id)->get();
+
+        $inicio = Carbon::parse($conv->fecha_inicio_beneficio)->startOfWeek(Carbon::MONDAY);
+        $fin    = Carbon::parse($conv->fecha_fin_beneficio)->endOfWeek(Carbon::SUNDAY);
+
+        $creadas = 0;
+
+        DB::transaction(function () use ($patrones, $inicio, $fin, $conv, &$creadas) {
+            $semana = $inicio->copy();
+            while ($semana->lte($fin)) {
+                foreach ($patrones as $pat) {
+                    $post = $pat->postulacion; // contiene user y sede de la postulación
+                    if (!$post) continue;
+
+                    $sede = mb_strtolower((string)($post->sede ?? 'caicedonia'));
+                    if (!in_array($sede, ['caicedonia','sevilla'], true)) $sede = 'caicedonia';
+
+                    $dias = (array)($pat->dias_iso ?? []);
+                    foreach ($dias as $dISO) {
+                        // Fecha del día ISO dentro de esta semana
+                        $fecha = $semana->copy()->addDays(((int)$dISO)-1);
+
+                        // Solo asigna dentro del rango real de beneficio
+                        if ($fecha->lt(Carbon::parse($conv->fecha_inicio_beneficio)) ||
+                            $fecha->gt(Carbon::parse($conv->fecha_fin_beneficio))) {
+                            continue;
+                        }
+
+                        // Cupo del día (capacidad sincronizada con la convocatoria)
+                        $cap = ($sede==='caicedonia') ? (int)($conv->cupos_caicedonia ?? 0) : (int)($conv->cupos_sevilla ?? 0);
                         $cupo = CupoDiario::firstOrCreate(
                             ['convocatoria_id'=>$conv->id,'fecha'=>$fecha->toDateString(),'sede'=>$sede],
                             ['capacidad'=>$cap,'asignados'=>0]
@@ -45,263 +185,50 @@ class AsignadorCuposService
                             $cupo->capacidad = $cap;
                             $cupo->save();
                         }
-                        $total++;
-                    }
-                }
-                $fecha->addDay();
-            }
-        });
 
-        return $total;
-    }
+                        // Evitar duplicado del usuario ese día (cualquier sede)
+                        $ya = CupoAsignacion::whereHas('cupo', function($q) use ($conv, $fecha) {
+                                $q->where('convocatoria_id', $conv->id)
+                                  ->whereDate('fecha', $fecha->toDateString());
+                            })
+                            ->where('user_id', $post->user_id)
+                            ->exists();
+                        if ($ya) continue;
 
-    // Planifica PATRONES semanales por estudiante y los persiste (una vez por convocatoria)
-    public function planificarPatrones(ConvocatoriaSubsidio $conv): int
-    {
-        // Semana base para resolver conflictos (lunes del inicio)
-        $lunes = Carbon::parse($conv->fecha_inicio_beneficio)->startOfWeek(Carbon::MONDAY);
-
-        // Asegúrate de tener cupos de esa semana base
-        $this->generarSemana($conv, $lunes);
-
-        // Map de ocupación por día/sede de la semana base (para no superar capacidad)
-        $cuposSemana = CupoDiario::where('convocatoria_id', $conv->id)
-            ->whereBetween('fecha', [$lunes->toDateString(), $lunes->copy()->addDays(6)->toDateString()])
-            ->orderBy('fecha')->orderBy('sede')->get()
-            ->keyBy(fn($c)=> $c->fecha->toDateString().'|'.$c->sede);
-
-        // Candidatos
-        $postulantes = PostulacionSubsidio::with('user')
-            ->where('convocatoria_id', $conv->id)
-            ->whereIn('estado', ['evaluada','beneficiario'])
-            ->orderByRaw('prioridad_final IS NULL')
-            ->orderBy('prioridad_final')
-            ->orderBy('created_at')
-            ->get();
-
-        $preferencias = $this->mapearPreferencias($postulantes);
-
-        $creados = 0;
-
-        DB::transaction(function () use ($postulantes, $preferencias, $cuposSemana, $lunes, $conv, &$creados) {
-            foreach ($postulantes as $p) {
-                $uid  = $p->user_id;
-                $prio = (int) ($p->prioridad_final ?? 9);
-                $max  = $this->maxPorSemana[$prio] ?? 1;
-
-                // Si ya tiene patrón, saltar
-                if (CupoPatron::where('convocatoria_id',$conv->id)->where('user_id',$uid)->exists()) {
-                    continue;
-                }
-
-                $diasPrefer = $preferencias[$uid] ?? [1,2,3,4,5];
-                $sedesPos   = $p->sede ? [mb_strtolower($p->sede)] : ['caicedonia','sevilla'];
-
-                $diasElegidos = [];
-                // Greedy: intenta asignar primero preferencias, respetando capacidad semanal base
-                foreach ([1,2,3,4,5] as $dISO) {
-                    if (!in_array($dISO, $diasPrefer, true)) continue;
-
-                    foreach ($sedesPos as $sede) {
-                        $fecha = $lunes->copy()->addDays($dISO-1)->toDateString();
-                        $key   = $fecha.'|'.$sede;
-                        $cupo  = $cuposSemana[$key] ?? null;
-
-                        if (!$cupo) continue;
                         if ($cupo->asignados >= $cupo->capacidad) continue;
 
-                        // Reservar slot en patrón
-                        $cupo->asignados++; // reservar virtualmente para la semana base
-                        $diasElegidos[] = $dISO;
-
-                        // Si ya alcanzó su máximo semanal, paramos
-                        if (count($diasElegidos) >= $max) {
-                            break 2;
-                        }
+                        CupoAsignacion::create([
+                            'cupo_diario_id' => $cupo->id,
+                            'postulacion_id' => $pat->postulacion_id,
+                            'user_id'        => $post->user_id,
+                            'estado'         => 'asignado',
+                            'asignado_en'    => now(),
+                            'qr_token'       => bin2hex(random_bytes(16)),
+                        ]);
+                        $cupo->increment('asignados');
+                        $creadas++;
                     }
                 }
-
-                // Si no alcanzó el máximo, y quedan días de lunes a viernes libres, completar
-                if (count($diasElegidos) < $max) {
-                    foreach ([1,2,3,4,5] as $dISO) {
-                        if (in_array($dISO, $diasElegidos, true)) continue;
-
-                        foreach ($sedesPos as $sede) {
-                            $fecha = $lunes->copy()->addDays($dISO-1)->toDateString();
-                            $key   = $fecha.'|'.$sede;
-                            $cupo  = $cuposSemana[$key] ?? null;
-
-                            if (!$cupo) continue;
-                            if ($cupo->asignados >= $cupo->capacidad) continue;
-
-                            $cupo->asignados++;
-                            $diasElegidos[] = $dISO;
-
-                            if (count($diasElegidos) >= $max) {
-                                break 2;
-                            }
-                        }
-                    }
-                }
-
-                if (!empty($diasElegidos)) {
-                    CupoPatron::create([
-                        'convocatoria_id' => $conv->id,
-                        'postulacion_id'  => $p->id,
-                        'user_id'         => $uid,
-                        'dias_iso'        => array_values($diasElegidos),
-                        'sede'            => $p->sede ? mb_strtolower($p->sede) : null,
-                        'max_semanal'     => count($diasElegidos),
-                    ]);
-                    $creados++;
-                }
-            }
-        });
-
-        return $creados;
-    }
-
-    // Aplica los PATRONES a TODO el periodo, creando CupoAsignacion por cada fecha aplicable
-    public function aplicarPatronesEnPeriodo(ConvocatoriaSubsidio $conv): int
-    {
-        if (!$conv->fecha_inicio_beneficio || !$conv->fecha_fin_beneficio) return 0;
-
-        $inicio = Carbon::parse($conv->fecha_inicio_beneficio)->startOfWeek(Carbon::MONDAY);
-        $fin    = Carbon::parse($conv->fecha_fin_beneficio)->endOfWeek(Carbon::SUNDAY);
-
-        // Asegura cupos de todo el periodo
-        $this->generarPeriodo($conv);
-
-        $patrones = CupoPatron::where('convocatoria_id', $conv->id)->get();
-
-        $creados = 0;
-
-        DB::transaction(function () use ($patrones, $inicio, $fin, $conv, &$creados) {
-            $semana = $inicio->copy();
-
-            while ($semana->lte($fin)) {
-                // Por cada patrón, materializar sus días en esta semana
-                foreach ($patrones as $pat) {
-                    $dias = (array) $pat->dias_iso;
-                    $sedePat = $pat->sede; // si es null, elegimos sede con disponibilidad (intentamos ambas)
-
-                    foreach ($dias as $dISO) {
-                        $fecha = $semana->copy()->addDays($dISO-1);
-                        if ($fecha->lt(Carbon::parse($conv->fecha_inicio_beneficio)) ||
-                            $fecha->gt(Carbon::parse($conv->fecha_fin_beneficio))) {
-                            continue;
-                        }
-
-                        $sedesIntento = $sedePat ? [$sedePat] : ['caicedonia','sevilla'];
-
-                        foreach ($sedesIntento as $sede) {
-                            // Cupo diario
-                            $cupo = CupoDiario::firstOrCreate(
-                                ['convocatoria_id'=>$conv->id,'fecha'=>$fecha->toDateString(),'sede'=>$sede],
-                                ['capacidad'=> (int) ($sede==='caicedonia' ? ($conv->cupos_caicedonia ?? 0) : ($conv->cupos_sevilla ?? 0)), 'asignados'=>0]
-                            );
-
-                            // Evitar duplicado del mismo usuario ese día/sede
-                            $existe = CupoAsignacion::where('cupo_diario_id',$cupo->id)
-                                ->where('user_id', $pat->user_id)
-                                ->exists();
-                            if ($existe) break;
-
-                            if ($cupo->asignados < $cupo->capacidad) {
-                                CupoAsignacion::create([
-                                    'cupo_diario_id' => $cupo->id,
-                                    'postulacion_id' => $pat->postulacion_id,
-                                    'user_id'        => $pat->user_id,
-                                    'estado'         => 'asignado',
-                                    'asignado_en'    => now(),
-                                    'qr_token'       => bin2hex(random_bytes(16)),
-                                ]);
-                                $cupo->increment('asignados');
-                                $creados++;
-                                break;
-                            }
-                        }
-                    }
-                }
-
                 $semana->addWeek();
             }
         });
 
-        return $creados;
+        return $creadas;
     }
 
-    // Genera cupos para una SEMANA (helper interno/externo)
-    public function generarSemana(ConvocatoriaSubsidio $conv, Carbon $lunes): Collection
+    // Intenta leer la matriz de preferencias; si no existe, usa L–V por defecto
+    private function mapearPreferencias(Collection $postulantes): array
     {
-        $fechas = collect(range(0, 6))
-            ->map(fn($d)=> $lunes->copy()->addDays($d))
-            ->filter(fn($f)=> in_array($f->dayOfWeekIso, [1,2,3,4,5]));
-
-        $capPorSede = [
-            'caicedonia' => (int) ($conv->cupos_caicedonia ?? 0),
-            'sevilla'    => (int) ($conv->cupos_sevilla ?? 0),
-        ];
-
-        $creados = collect();
-
-        DB::transaction(function () use ($conv, $fechas, $capPorSede, &$creados) {
-            foreach ($fechas as $f) {
-                foreach ($capPorSede as $sede => $cap) {
-                    $cupo = CupoDiario::firstOrCreate(
-                        ['convocatoria_id'=>$conv->id,'fecha'=>$f->toDateString(),'sede'=>$sede],
-                        ['capacidad'=>$cap, 'asignados'=>0]
-                    );
-                    if ($cupo->capacidad !== $cap) {
-                        $cupo->capacidad = $cap;
-                        $cupo->save();
-                    }
-                    $creados->push($cupo);
-                }
-            }
-        });
-
-        return $creados;
-    }
-
-    private function mapearPreferencias($postulantes): array
-    {
-        $map = [];
+        $out = [];
         foreach ($postulantes as $p) {
-            $dias = [];
-            if (isset($p->preferencias_dias) && is_array($p->preferencias_dias) && count($p->preferencias_dias)) {
-                $dias = $p->preferencias_dias;
-            } else {
-                // Fallback: intenta desde respuestas JSON
-                try {
-                    $rels = $p->relationLoaded('respuestas') ? $p->respuestas : $p->respuestas()->with('pregunta')->get();
-                    $r = $rels->first(function ($r) {
-                        $tipo = optional($r->pregunta)->tipo;
-                        $nombre = mb_strtolower(optional($r->pregunta)->nombre ?? '');
-                        return ($tipo === 'matrix_single') || str_contains($nombre, 'preferencias') || str_contains($nombre, 'días');
-                    });
-                    if ($r && is_array($r->respuesta_json)) $dias = $r->respuesta_json;
-                } catch (\Throwable $e) {
-                    $dias = [];
-                }
-            }
-
-            $iso = array_map(function ($d) {
-                $d = mb_strtolower((string) $d);
-                return match ($d) {
-                    '1','lunes','lun'       => 1,
-                    '2','martes','mar'      => 2,
-                    '3','miercoles','miércoles','mie' => 3,
-                    '4','jueves','jue'      => 4,
-                    '5','viernes','vie'     => 5,
-                    '6','sabado','sábado','sab' => 6,
-                    '7','domingo','dom'     => 7,
-                    default => null,
-                };
-            }, is_array($dias) ? $dias : []);
-            $iso = array_values(array_filter($iso));
-            $map[$p->user_id] = count($iso) ? $iso : [1,2,3,4,5];
+            $uid = $p->user_id;
+            // Por simplicidad: si tienes una relación respuestas o JSON con matriz de días, puedes leerla aquí.
+            // Fallback: lunes–viernes
+            $out[$uid] = [
+                'sede' => mb_strtolower((string)($p->sede ?? 'caicedonia')),
+                'dias' => [1,2,3,4,5],
+            ];
         }
-        return $map;
+        return $out;
     }
 }

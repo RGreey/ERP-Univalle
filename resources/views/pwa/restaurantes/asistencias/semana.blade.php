@@ -1,4 +1,5 @@
 @extends('layouts.app')
+@include('pwa.subsidio._pwa_head')
 @section('title','Resumen semanal')
 
 @section('content')

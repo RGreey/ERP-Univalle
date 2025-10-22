@@ -26,6 +26,8 @@ use App\Http\Controllers\AdminReportesController;
 use App\Http\Controllers\PWA\Restaurantes\AsistenciasController;
 use App\Http\Controllers\PWA\Restaurantes\ReportesRestauranteController;
 use App\Http\Controllers\PWA\Restaurantes\RestaurantesDashboardController;
+use App\Http\Controllers\StandbyOfferController;
+use App\Http\Controllers\PWA\StandbyController;
 
 use Illuminate\Foundation\Auth\EmailVerificationRequest;
 use Illuminate\Http\Request;
@@ -742,7 +744,11 @@ Route::middleware(['auth', 'checkrole:AdminBienestar'])->prefix('admin')->as('ad
     Route::get('/reportes', [AdminReportesController::class, 'index'])->name('reportes');
     Route::get('/reportes/{reporte}', [AdminReportesController::class, 'show'])->name('reportes.show');
     Route::post('/reportes/{reporte}/estado', [AdminReportesController::class, 'updateEstado'])->name('reportes.estado');
+    // NUEVO: alias "default" que redirige con parámetros por defecto (hoy y sede)
+    Route::get('/cupos/dia/default', [AdminCuposController::class, 'diaDefault'])->name('cupos.dia.default');
 
+    // Reponer ofertas de cupos
+    Route::post('/cupos/reponer-ofertas', [AdminCuposController::class, 'reponerOfertas'])->name('cupos.reponer-ofertas');
 
 
 
@@ -796,6 +802,10 @@ Route::middleware(['auth','checkrole:Estudiante'])
         Route::post('/reportes', [\App\Http\Controllers\PWA\ReportesEstudianteController::class, 'store'])->name('reportes.store');
         Route::get('/reportes/{reporte}', [\App\Http\Controllers\PWA\ReportesEstudianteController::class, 'show'])->name('reportes.show');
 
+        //reponer cupos
+        Route::get('/standby', [StandbyController::class, 'index'])->name('standby');
+        Route::post('/standby', [StandbyController::class, 'save'])->name('standby.save');
+
 
         Route::get('/ping', fn() => 'ok')->name('ping');
     });
@@ -833,6 +843,9 @@ Route::middleware(['auth','checkrole:Restaurante'])
 
         // Festivos
         Route::post('/asistencias/festivo', [AsistenciasController::class,'marcarFestivo'])->name('restaurantes.asistencias.festivo');
+
+        // Canonicalizar trailing slash del módulo restaurantes
+        Route::redirect('/app/restaurantes/', '/app/restaurantes', 301);
     });
     
 
@@ -841,4 +854,13 @@ Route::middleware(['auth','checkrole:Restaurante'])
 // DIAGNÓSTICO TEMPORAL — BORRAR AL FINAL
 Route::get('/app/test', function () {
     return 'ok /app/test está vivo';
+});
+
+Route::middleware('throttle:30,1')
+    ->get('/standby/oferta/aceptar', [\App\Http\Controllers\StandbyOfferController::class, 'aceptar'])
+    ->name('standby.oferta.aceptar');
+// Admin: reponer ofertas ahora (botón manual)
+Route::middleware(['auth','checkrole:AdminBienestar'])->prefix('admin')->as('admin.')->group(function () {
+    Route::post('/cupos/reponer-ofertas', [\App\Http\Controllers\AdminCuposController::class, 'reponerOfertas'])
+        ->name('cupos.reponer-ofertas');
 });

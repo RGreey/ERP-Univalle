@@ -171,6 +171,11 @@
             <li><a href="{{ route('admin.estudiantes') }}">Gestión de estudiantes</a></li>
             <li><a href="{{ route('admin.convocatorias') }}">Convocatorias</a></li>
             <li><a href="{{ \Illuminate\Support\Facades\Route::has('admin.cupos.index') ? route('admin.cupos.index') : '#' }}">Cupos y Asignaciones</a></li>
+            <li>
+                <a href="{{ \Illuminate\Support\Facades\Route::has('admin.cupos.dia.default') ? route('admin.cupos.dia.default') : '#' }}">
+                    Reemplazos y vacantes
+                </a>
+            </li>
             <li><a href="{{ route('admin.restaurantes.index') }}">Restaurantes</a></li>
             <li><a href="{{ route('admin.asistencias.index') }}">Asistencias</a></li>
             <li><a href="{{ route('admin.asistencias.cancelaciones') }}">Cancelaciones</a></li>
