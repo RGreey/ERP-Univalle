@@ -1,7 +1,8 @@
 {
-  "name": "Restaurantes - Subsidio",
+  "id": "/app/restaurantes/",
+  "name": "Restaurantes Univalle",
   "short_name": "Restaurantes",
-  "start_url": "/app/restaurantes/",
+  "start_url": "/app/restaurantes",
   "scope": "/app/restaurantes/",
   "display": "standalone",
   "background_color": "#ffffff",

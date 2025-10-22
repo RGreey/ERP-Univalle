@@ -37,6 +37,15 @@
         <meta name="theme-color" content="#cd1f32">
         <link rel="apple-touch-icon" href="/restaurantes/icons/icon-192.png">
     @endif
+    @stack('head')
+    <script>
+        window.__pwaInstallEvt = null;
+        window.addEventListener('beforeinstallprompt', function(e) {
+            console.log('[PWA] beforeinstallprompt (early) capturado');
+            e.preventDefault();
+            window.__pwaInstallEvt = e;
+        });
+    </script>
 </head>
 <body @if(auth()->check() && method_exists(auth()->user(),'hasRole') && auth()->user()->hasRole('Restaurante')) data-role="restaurante" @endif>
 
@@ -191,7 +200,37 @@
                             </ul>
                         </li>
                     @endif
+                    @if(auth()->check() && auth()->user()->hasRole('Estudiante'))
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="subsidioDropdown"
+                            role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <span>Subsidio Alimenticio</span>
+                                @isset($subsidioConvocatoriasCount)
+                                    @if($subsidioConvocatoriasCount > 0)
+                                        <span class="badge bg-success ms-2">{{ $subsidioConvocatoriasCount }}</span>
+                                    @endif
+                                @endisset
+                            </a>
 
+                            <ul class="dropdown-menu" aria-labelledby="subsidioDropdown">
+                                <li>
+                                    <a class="dropdown-item" href="{{ route('subsidio.convocatorias.index') }}">
+                                        Postulaciones
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="{{ route('app.subsidio.mis-cupos') }}">
+                                        Cupos
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item" href="{{ route('app.subsidio.reportes.index') }}">
+                                        Reportes
+                                    </a>
+                                </li>
+                            </ul>
+                        </li>
+                    @endif                    
                     <li class="nav-item">
                         <a class="nav-link" href="{{ route('calendario') }}">
                             Calendario <i class="fa-regular fa-calendar"></i>
@@ -199,7 +238,7 @@
                     </li>
                 @endif
             </ul>
-
+                                        
             <!-- DERECHA: menú usuario -->
             <div class="d-flex">
                 <div class="dropdown">
@@ -234,7 +273,11 @@
     <button id="pwa-install-btn" class="btn btn-primary btn-sm">Instalar Restaurantes</button>
   </div>
 @endif
-
+@if($hasRole('Estudiante'))
+  <div id="pwa-install-box-subsidio" class="position-fixed bottom-0 end-0 p-3" style="z-index:1050; display:none;">
+    <button id="pwa-install-btn-subsidio" class="btn btn-primary btn-sm">Instalar Subsidio</button>
+  </div>
+@endif
 <!-- Scripts -->
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
@@ -243,50 +286,99 @@
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
 {{-- PWA: registrar SW y manejar instalación (al final, con DOM ya listo) --}}
-@if($esRestaurante)
+{{-- PWA: registro y gestor de instalación --}}
 <script>
 (function() {
-  // Registrar SW
+  // 1) Registrar SW por scope (no se interfieren)
   if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/app/sw-restaurantes.js', { scope: '/app/restaurantes/' })
-        .then(reg => console.log('SW Restaurantes registrado:', reg.scope))
-        .catch(err => console.error('SW Restaurantes error:', err));
+    window.addEventListener('load', async () => {
+      try {
+        if ({{ $hasRole('Estudiante') ? 'true' : 'false' }}) {
+          await navigator.serviceWorker.register('/app/sw-subsidio.js', { scope: '/app/subsidio/' });
+          console.log('[PWA] SW Subsidio registrado');
+        }
+        if ({{ $esRestaurante ? 'true' : 'false' }}) {
+          await navigator.serviceWorker.register('/app/sw-restaurantes.js', { scope: '/app/restaurantes/' });
+          console.log('[PWA] SW Restaurantes registrado');
+        }
+      } catch (e) {
+        console.error('[PWA] Error registrando SW:', e);
+      }
     });
   }
 
-  // Instalar app
-  let deferredPrompt = null;
-  const box = document.getElementById('pwa-install-box');
-  const btn = document.getElementById('pwa-install-btn');
+  // 2) Gestor de instalación
+  let bipEvent = window.__pwaInstallEvt || null;
 
-  // Ocultar si ya está en modo standalone (instalada)
+  const boxRest = document.getElementById('pwa-install-box');
+  const btnRest = document.getElementById('pwa-install-btn');
+  const boxSub  = document.getElementById('pwa-install-box-subsidio');
+  const btnSub  = document.getElementById('pwa-install-btn-subsidio');
+
   const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
-  if (isStandalone && box) box.style.display = 'none';
+  const normPath = () => location.pathname.replace(/\/+$/, '');
 
+  function updateInstallBoxes() {
+    if (isStandalone) {
+      if (boxRest) boxRest.style.display = 'none';
+      if (boxSub)  boxSub.style.display  = 'none';
+      return;
+    }
+    // refresca el evento desde la variable global (lo pudo capturar el head)
+    if (!bipEvent && window.__pwaInstallEvt) bipEvent = window.__pwaInstallEvt;
+
+    const p = normPath();
+    const inRest = (p === '/app/restaurantes') || p.startsWith('/app/restaurantes/');
+    const inSub  = (p === '/app/subsidio')     || p.startsWith('/app/subsidio/');
+
+    const canShow = true; // mostramos siempre el botón; si no hay evento, damos instrucciones
+    if (boxRest) boxRest.style.display = (canShow && inRest) ? 'block' : 'none';
+    if (boxSub)  boxSub.style.display  = (canShow && inSub)  ? 'block' : 'none';
+  }
+
+  // Captura tardía si el navegador lo lanza después
   window.addEventListener('beforeinstallprompt', (e) => {
+    console.log('[PWA] beforeinstallprompt (late) capturado');
     e.preventDefault();
-    deferredPrompt = e;
-    if (box) box.style.display = 'block';
-    console.log('beforeinstallprompt listo');
+    window.__pwaInstallEvt = e;
+    bipEvent = e;
+    updateInstallBoxes();
   });
 
-  btn && btn.addEventListener('click', async () => {
-    if (!deferredPrompt) return;
-    deferredPrompt.prompt();
-    const choice = await deferredPrompt.userChoice;
-    console.log('Instalación:', choice?.outcome);
-    deferredPrompt = null;
-    if (box) box.style.display = 'none';
-  });
+  document.addEventListener('DOMContentLoaded', updateInstallBoxes);
+  window.addEventListener('popstate', updateInstallBoxes);
+
+  async function tryInstall() {
+    const ev = window.__pwaInstallEvt || bipEvent;
+    if (ev) {
+      try { ev.prompt(); await ev.userChoice; } catch (_){}
+      window.__pwaInstallEvt = null;
+      bipEvent = null;
+      updateInstallBoxes();
+      return;
+    }
+    // Fallback: si no tenemos evento, mostramos instrucciones
+    const onRest = location.pathname.startsWith('/app/restaurantes');
+    const titulo = onRest ? 'Instalar Restaurantes' : 'Instalar Subsidio';
+    const pasos = navigator.userAgent.includes('Android')
+      ? 'Abre el menú del navegador (⋮) y elige "Agregar a pantalla principal" o "Instalar app".'
+      : 'En la barra de direcciones, haz clic en el icono de "Instalar" (monitor con flecha) o usa el menú del navegador y elige "Instalar app".';
+    try {
+      await Swal.fire({ icon: 'info', title: titulo, text: pasos, confirmButtonText: 'Entendido' });
+    } catch (_) {}
+  }
+
+  if (btnRest) btnRest.addEventListener('click', tryInstall);
+  if (btnSub)  btnSub.addEventListener('click',  tryInstall);
 
   window.addEventListener('appinstalled', () => {
-    console.log('PWA instalada');
-    if (box) box.style.display = 'none';
+    console.log('[PWA] App instalada');
+    window.__pwaInstallEvt = null;
+    bipEvent = null;
+    updateInstallBoxes();
   });
 })();
 </script>
-@endif
 
 @stack('scripts')
 </body>

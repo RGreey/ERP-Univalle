@@ -15,30 +15,14 @@ class ReglasCuposService
         if (!$asig->cupo) return false;
 
         // Bloquea si el día es festivo
-        if ($this->esFestivo($asig->cupo)) return false;
+        if ($this->isFestivo($asig->cupo)) return false;
 
-        $hora = (string) config('subsidio.hora_limite_cancelar', '09:30');
+        $hora = (string) config('subsidio.cancelacion_tardia_hasta', '13:00');
         [$lim, $fecha] = $this->limiteDelDia($asig->cupo, $hora);
 
-        return $this->esDiaHabil($fecha) && now($this->tz())->lte($lim);
+        return $this->isDiaHabil($fecha) && now($this->tz())->lte($lim);
     }
 
-    public function canUndo(CupoAsignacion $asig): bool
-    {
-        if (($asig->asistencia_estado ?? '') !== 'cancelado') return false;
-        if (!$asig->relationLoaded('cupo')) $asig->load('cupo');
-        if (!$asig->cupo) return false;
-
-        // También bloquea si el día es festivo
-        if ($this->esFestivo($asig->cupo)) return false;
-
-        $hora = (string) config('subsidio.hora_limite_deshacer', '11:00');
-        [$lim, $fecha] = $this->limiteDelDia($asig->cupo, $hora);
-
-        return $this->esDiaHabil($fecha) && now($this->tz())->lte($lim);
-    }
-
-    // Mensaje de por qué NO puede cancelar (null si sí puede)
     public function razonNoCancelar(CupoAsignacion $asig): ?string
     {
         if (($asig->asistencia_estado ?? 'pendiente') !== 'pendiente') {
@@ -46,49 +30,57 @@ class ReglasCuposService
         }
         if (!$asig->relationLoaded('cupo')) $asig->load('cupo');
         if (!$asig->cupo) return 'Cupo no encontrado.';
+        if ($this->isFestivo($asig->cupo)) return 'Día festivo: no hay servicio.';
 
-        if ($this->esFestivo($asig->cupo)) return 'Día festivo: no hay servicio.';
-
-        $hora = (string) config('subsidio.hora_limite_cancelar', '09:30');
+        $hora = (string) config('subsidio.cancelacion_tardia_hasta', '13:00');
         [$lim, $fecha] = $this->limiteDelDia($asig->cupo, $hora);
-
-        if (!$this->esDiaHabil($fecha)) return 'No es un día hábil.';
+        if (!$this->isDiaHabil($fecha)) return 'No es un día hábil.';
         if (now($this->tz())->gt($lim)) return 'Pasó la hora límite ('.$lim->format('H:i').').';
-
-        return null;
-    }
-
-    // Mensaje de por qué NO puede deshacer (null si sí puede)
-    public function razonNoDeshacer(CupoAsignacion $asig): ?string
-    {
-        if (($asig->asistencia_estado ?? '') !== 'cancelado') {
-            return 'Solo aplica para cancelaciones.';
-        }
-        if (!$asig->relationLoaded('cupo')) $asig->load('cupo');
-        if (!$asig->cupo) return 'Cupo no encontrado.';
-
-        if ($this->esFestivo($asig->cupo)) return 'Día festivo: no aplica.';
-
-        $hora = (string) config('subsidio.hora_limite_deshacer', '11:00');
-        [$lim, $fecha] = $this->limiteDelDia($asig->cupo, $hora);
-
-        if (!$this->esDiaHabil($fecha)) return 'No es un día hábil.';
-        if (now($this->tz())->gt($lim)) return 'Pasó la hora límite ('.$lim->format('H:i').').';
-
         return null;
     }
 
     public function limiteCancelar(CupoDiario $cupo): Carbon
     {
-        $hora = (string) config('subsidio.hora_limite_cancelar', '09:30');
+        $hora = (string) config('subsidio.cancelacion_tardia_hasta', '13:00');
         return $this->limiteDelDia($cupo, $hora)[0];
+    }
+
+    public function canUndo(CupoAsignacion $asig): bool
+    {
+        if (($asig->asistencia_estado ?? '') !== 'cancelado') return false;
+        if (!$asig->relationLoaded('cupo')) $asig->load('cupo');
+        if (!$asig->cupo) return false;
+        if ($this->isFestivo($asig->cupo)) return false;
+
+        $hora = (string) config('subsidio.hora_limite_deshacer', '10:00');
+        [$lim, $fecha] = $this->limiteDelDia($asig->cupo, $hora);
+
+        return $this->isDiaHabil($fecha) && now($this->tz())->lte($lim);
+    }
+
+    public function razonNoDeshacer(CupoAsignacion $asig): ?string
+    {
+        if (($asig->asistencia_estado ?? '') !== 'cancelado') {
+            return 'Solo puedes deshacer si está en estado "cancelado".';
+        }
+        if (!$asig->relationLoaded('cupo')) $asig->load('cupo');
+        if (!$asig->cupo) return 'Cupo no encontrado.';
+        if ($this->isFestivo($asig->cupo)) return 'Día festivo: no hay servicio.';
+
+        $hora = (string) config('subsidio.hora_limite_deshacer', '10:00');
+        [$lim, $fecha] = $this->limiteDelDia($asig->cupo, $hora);
+        if (!$this->isDiaHabil($fecha)) return 'No es un día hábil.';
+        if (now($this->tz())->gt($lim)) return 'Pasó la hora límite ('.$lim->format('H:i').').';
+        return null;
     }
 
     public function limiteDeshacer(CupoDiario $cupo): Carbon
     {
-        $hora = (string) config('subsidio.hora_limite_deshacer', '11:00');
+        $hora = (string) config('subsidio.hora_limite_deshacer', '10:00');
         return $this->limiteDelDia($cupo, $hora)[0];
     }
+
+    // Helpers
 
     private function limiteDelDia(CupoDiario $cupo, string $hora): array
     {
@@ -98,23 +90,22 @@ class ReglasCuposService
 
         $fecha = $base->copy()->startOfDay();
         $lim   = $base->copy()->setTimeFromTimeString($hora);
-
         return [$lim, $fecha];
     }
 
-    private function esDiaHabil(Carbon $fecha): bool
+    private function isDiaHabil(Carbon $fecha): bool
     {
-        return in_array($fecha->dayOfWeekIso, config('subsidio.dias_habiles_iso', [1,2,3,4,5]), true);
+        return in_array($fecha->dayOfWeekIso, (array) config('subsidio.dias_habiles_iso', [1,2,3,4,5]), true);
     }
 
-    private function esFestivo(CupoDiario $cupo): bool
+    private function isFestivo(CupoDiario $cupo): bool
     {
-        // Nueva bandera agregada por migración
+        // Soporta ambos: atributo cast o columna booleana. Por defecto: no festivo.
         return (bool) ($cupo->es_festivo ?? false);
     }
 
     private function tz(): string
     {
-        return (string) config('subsidio.timezone', 'America/Bogota');
+        return (string) config('subsidio.timezone','America/Bogota');
     }
 }

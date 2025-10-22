@@ -1,5 +1,5 @@
 @extends('layouts.app')
-
+@include('pwa.subsidio._pwa_head')
 @section('title','Detalle de postulación')
 
 @section('content')

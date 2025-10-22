@@ -1,4 +1,5 @@
 @extends('layouts.app')
+@include('pwa.subsidio._pwa_head')
 @section('title','Mis cupos (App)')
 
 @push('head')
@@ -16,7 +17,9 @@
     @if($errors->any())
         <div class="alert alert-danger"><ul class="mb-0">@foreach($errors->all() as $e)<li>{{ $e }}</li>@endforeach</ul></div>
     @endif
-
+    <div class="d-flex gap-2 mb-3">
+        <a class="btn btn-outline-primary btn-sm" href="{{ route('app.subsidio.standby') }}">Configurar standby</a>
+    </div>
     <div class="d-flex justify-content-between align-items-center mb-3">
         <a class="btn btn-outline-secondary btn-sm" href="{{ route('app.subsidio.mis-cupos', ['semana' => $lunes->copy()->subWeek()->toDateString()]) }}">&laquo; Semana anterior</a>
         <span class="text-muted">Semana que inicia: {{ $lunes->toDateString() }}</span>

@@ -7,6 +7,7 @@ use App\Models\CupoDiario;
 use App\Models\CupoAsignacion;
 use App\Models\PostulacionSubsidio;
 use App\Services\AsignadorCuposService;
+use App\Services\StandbyOfferService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -311,7 +312,8 @@ class AdminCuposController extends Controller
             return back()->with('success', 'El estudiante ya está asignado este día.');
         }
 
-        if ($cupo->asignados >= $cupo->capacidad) {
+        $activos = $cupo->ocupacionActiva();
+        if ($activos >= $cupo->capacidad) {
             return back()->with('success', 'No hay cupos disponibles para este día.');
         }
 
@@ -569,4 +571,59 @@ class AdminCuposController extends Controller
 
         return $out;
     }
+
+
+    public function diaDefault(Request $request)
+    {
+        $tz = config('subsidio.timezone','America/Bogota');
+        $conv = ConvocatoriaSubsidio::orderByDesc('created_at')->first();
+
+        if (!$conv) {
+            return redirect()->route('admin.subsidio.admin.dashboard')
+                ->with('error','No hay convocatorias de subsidio para gestionar.');
+        }
+
+        $fecha = now($tz)->toDateString();
+        $sede  = $request->query('sede', 'caicedonia'); // cambia por 'sevilla' si prefieres
+
+        return redirect()->route('admin.cupos.dia', [
+            'convocatoria_id' => $conv->id,
+            'fecha'           => $fecha,
+            'sede'            => $sede,
+        ]);
+    }
+
+
+    public function reponerOfertas(Request $request, \App\Services\StandbyOfferService $svc)
+{
+    $data = $request->validate([
+        'cupo_diario_id' => ['required','integer','exists:subsidio_cupos_diarios,id'],
+    ]);
+
+    $cupo = \App\Models\CupoDiario::findOrFail($data['cupo_diario_id']);
+
+    // 1) Caducar pendientes vencidas para no bloquear reenvíos
+    $svc->expirePendientesVencidas($cupo);
+
+    // 2) Vacantes por ocupación activa (NO cancelados)
+    $activos = \App\Models\CupoAsignacion::where('cupo_diario_id', $cupo->id)
+        ->where(function($q){
+            $q->whereNull('asistencia_estado')
+              ->orWhere('asistencia_estado','!=','cancelado');
+        })
+        ->count();
+
+    $vac = max(0, (int)$cupo->capacidad - (int)$activos);
+    if ($vac <= 0) {
+        return back()->with('success','No hay vacantes para reponer.');
+    }
+
+    // 3) Emitir lotes
+    $parallel = (int) config('subsidio.standby_parallel_offers', 5);
+    $ttlMin   = (int) config('subsidio.oferta_ttl_min', 10);
+
+    $creadas = $svc->emitirOfertasPorVacantes($cupo, $vac, $parallel, $ttlMin);
+
+    return back()->with('success', "Ofertas emitidas: {$creadas}.");
+}
 }

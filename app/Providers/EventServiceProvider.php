@@ -5,7 +5,10 @@ namespace App\Providers;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Auth\Listeners\SendEmailVerificationNotification;
 use Illuminate\Foundation\Support\Providers\EventServiceProvider as ServiceProvider;
-use Illuminate\Support\Facades\Event;
+
+// Agrega estos use para tu flujo de standby
+use App\Events\CupoCancelado;
+use App\Listeners\EmitirOfertasStandby;
 
 class EventServiceProvider extends ServiceProvider
 {
@@ -15,8 +18,14 @@ class EventServiceProvider extends ServiceProvider
      * @var array<class-string, array<int, class-string>>
      */
     protected $listen = [
+        // Listener que ya tenías (verificación de email)
         Registered::class => [
             SendEmailVerificationNotification::class,
+        ],
+
+        // NUEVO: al cancelar un cupo, emitir ofertas de standby
+        CupoCancelado::class => [
+            EmitirOfertasStandby::class,
         ],
     ];
 
@@ -29,7 +38,8 @@ class EventServiceProvider extends ServiceProvider
     }
 
     /**
-     * Determine if events and listeners should be automatically discovered.
+     * If you prefer auto-discovery of events, you could set this to true,
+     * pero lo dejamos en false para controlar explícitamente $listen.
      */
     public function shouldDiscoverEvents(): bool
     {

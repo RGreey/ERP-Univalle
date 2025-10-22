@@ -19,4 +19,18 @@ class CupoDiario extends Model
     {
         return $this->hasMany(CupoAsignacion::class, 'cupo_diario_id');
     }
+    public function ocupacionActiva(): int
+    {
+        return $this->asignaciones()
+            ->where(function ($q) {
+                $q->whereNull('asistencia_estado')->orWhere('asistencia_estado', '!=', 'cancelado');
+            })
+            ->count();
+    }
+
+    // Vacantes basadas en ocupación activa
+    public function vacantesActivas(): int
+    {
+        return max(0, (int) $this->capacidad - (int) $this->ocupacionActiva());
+    }
 }

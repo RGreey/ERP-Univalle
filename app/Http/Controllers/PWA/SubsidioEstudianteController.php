@@ -8,6 +8,9 @@ use App\Models\CupoDiario;
 use App\Services\ReglasCuposService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use App\Events\CupoCancelado;
+use App\Models\Strike;
+
 
 class SubsidioEstudianteController extends Controller
 {
@@ -61,7 +64,25 @@ class SubsidioEstudianteController extends Controller
             'cancelacion_motivo'    => $data['motivo'] ?? null,
         ]);
 
-        return back()->with('success','Cancelación registrada.');
+        // Strike por cancelación tardía (09:00–12:00 del día del cupo)
+        $tz = config('subsidio.timezone','America/Bogota');
+        $fechaCupo = $asig->cupo->fecha->toDateString();
+        $now  = now($tz);
+        $limN = Carbon::parse($fechaCupo.' '.config('subsidio.cancelacion_normal_hasta','09:00'), $tz);
+        $limT = Carbon::parse($fechaCupo.' '.config('subsidio.cancelacion_tardia_hasta','12:00'), $tz);
+        if ($now->gt($limN) && $now->lte($limT)) {
+            Strike::create([
+                'user_id'     => $asig->user_id,
+                'tipo'        => 'cancel_tardia',
+                'fecha'       => $fechaCupo,
+                'observacion' => 'Cancelación tardía por estudiante',
+            ]);
+        }
+
+        // Disparar flujo de reemplazos
+        event(new CupoCancelado($asig->cupo_diario_id, $asig->id, 'cancelacion'));
+
+        return back()->with('success','Cancelación registrada. Estamos buscando reemplazo.');
     }
 
     public function deshacer(Request $request, ReglasCuposService $reglas)

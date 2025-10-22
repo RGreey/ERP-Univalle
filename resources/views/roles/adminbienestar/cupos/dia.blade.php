@@ -9,6 +9,9 @@
     @media (max-width: 992px){
         .filters .btn, .filters .form-control, .filters .form-select { width: 100%; }
     }
+    .uv-meta { font-size:.85rem; color:#6c757d; }
+    .uv-kpi { display:flex; gap:10px; flex-wrap:wrap; }
+    .uv-kpi .pill { background:#f3f5f7; border-radius:20px; padding:4px 10px; font-size:.85rem; }
 </style>
 
 <div class="container">
@@ -66,8 +69,21 @@
                     </div>
                 </form>
 
+                @php
+                    // Ocupación activa = asignaciones que no están canceladas
+                    $activos = method_exists($cupo,'ocupacionActiva')
+                        ? $cupo->ocupacionActiva()
+                        : \App\Models\CupoAsignacion::where('cupo_diario_id', $cupo->id)
+                            ->where(function($q){ $q->whereNull('asistencia_estado')->orWhere('asistencia_estado','!=','cancelado'); })
+                            ->count();
+                    $vacantes = max(0, (int)$cupo->capacidad - (int)$activos);
+                @endphp
+
                 <div class="mt-3 uv-sub">
-                    Asignados: <strong>{{ $cupo->asignados }}</strong> / {{ $cupo->capacidad }}
+                    Asignados activos: <strong>{{ $activos }}</strong> / {{ $cupo->capacidad }}
+                    @if(!is_null($cupo->asignados))
+                        <div class="small text-muted">Total histórico (campo legado): {{ $cupo->asignados }}</div>
+                    @endif
                 </div>
 
                 <hr>
@@ -91,6 +107,95 @@
                         @endforeach
                     </ul>
                 @endif
+
+                {{-- Reemplazos (Standby) --}}
+                @php
+                    $parallel = (int) config('subsidio.standby_parallel_offers', 5);
+                    $ttlMin   = (int) config('subsidio.oferta_ttl_min', 10);
+                    $hasStandby = true;
+                    $tz = (string) config('subsidio.timezone','America/Bogota');
+                    $now = now($tz);
+                    try {
+                        // Solo pendientes VIGENTES
+                        $pendientes = \App\Models\StandbyOferta::with('user')
+                            ->where('cupo_diario_id', $cupo->id)
+                            ->where('estado','pendiente')
+                            ->where(function($q) use ($now) { $q->whereNull('vence_en')->orWhere('vence_en','>',$now); })
+                            ->orderBy('created_at','asc')
+                            ->limit(10)->get();
+
+                        $stats = [
+                            'pendientes' => \App\Models\StandbyOferta::where('cupo_diario_id',$cupo->id)
+                                ->where('estado','pendiente')
+                                ->where(function($q) use ($now) { $q->whereNull('vence_en')->orWhere('vence_en','>',$now); })
+                                ->count(),
+                            'asignadas'  => \App\Models\StandbyOferta::where('cupo_diario_id',$cupo->id)->where('estado','asignada')->count(),
+                            'expiradas'  => \App\Models\StandbyOferta::where('cupo_diario_id',$cupo->id)->where('estado','expirada')->count(),
+                            'ocupadas'   => \App\Models\StandbyOferta::where('cupo_diario_id',$cupo->id)->where('estado','cup_full')->count(),
+                        ];
+                    } catch (\Throwable $e) {
+                        // Si aún no existen tablas/modelos de standby, ocultar el bloque
+                        $hasStandby = false;
+                        $pendientes = collect();
+                        $stats = ['pendientes'=>0,'asignadas'=>0,'expiradas'=>0,'ocupadas'=>0];
+                    }
+                @endphp
+
+                @if($hasStandby)
+                    <hr>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h6 class="mb-0">Reemplazos (Standby)</h6>
+                        <form method="POST" action="{{ route('admin.cupos.reponer-ofertas') }}" class="ms-2">
+                            @csrf
+                            <input type="hidden" name="cupo_diario_id" value="{{ $cupo->id }}">
+                            <button class="btn btn-sm btn-outline-primary" @disabled($vacantes<=0)>
+                                Reponer ofertas ahora
+                            </button>
+                        </form>
+                    </div>
+                    <div class="uv-meta mt-2">
+                        Vacantes: <strong>{{ $vacantes }}</strong> ·
+                        Ofertas paralelas por vacante: <strong>{{ $parallel }}</strong> ·
+                        TTL por oferta: <strong>{{ $ttlMin }} min</strong>
+                        <div class="uv-kpi mt-2">
+                            <span class="pill">Pendientes: {{ $stats['pendientes'] }}</span>
+                            <span class="pill">Asignadas: {{ $stats['asignadas'] }}</span>
+                            <span class="pill">Expiradas: {{ $stats['expiradas'] }}</span>
+                            <span class="pill">Ocupadas: {{ $stats['ocupadas'] }}</span>
+                        </div>
+                    </div>
+
+                    <div class="mt-2">
+                        <div class="small text-muted mb-1">Pendientes (máx. 10 más recientes)</div>
+                        @if($pendientes->isEmpty())
+                            <div class="text-muted">Sin ofertas pendientes.</div>
+                        @else
+                            <div class="table-responsive">
+                                <table class="table table-sm align-middle mb-0">
+                                    <thead>
+                                        <tr>
+                                            <th>Estudiante</th>
+                                            <th>Correo</th>
+                                            <th>Enviada</th>
+                                            <th>Vence</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach($pendientes as $o)
+                                            <tr>
+                                                <td>{{ $o->user?->name ?? '—' }}</td>
+                                                <td class="small text-muted">{{ $o->user?->email ?? '—' }}</td>
+                                                <td class="small">{{ optional($o->enviado_en)->format('H:i') ?? '—' }}</td>
+                                                <td class="small">{{ optional($o->vence_en)->format('H:i') ?? '—' }}</td>
+                                            </tr>
+                                        @endforeach
+                                    </tbody>
+                                </table>
+                            </div>
+                        @endif
+                    </div>
+                @endif
+                {{-- Fin Reemplazos --}}
             </div>
         </div>
 
@@ -151,7 +256,7 @@
                                     <td class="text-end">
                                         @if($p->asignado_este_dia)
                                             <span class="text-muted small">Ya asignado este día</span>
-                                        @elseif($cupo->asignados >= $cupo->capacidad)
+                                        @elseif($vacantes <= 0)
                                             <span class="text-danger small">Sin cupos</span>
                                         @else
                                             <form method="POST" action="{{ route('admin.cupos.dia.asignar') }}" class="d-inline">
