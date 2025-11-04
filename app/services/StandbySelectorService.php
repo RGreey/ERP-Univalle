@@ -7,6 +7,8 @@ use App\Models\CupoDiario;
 use App\Models\StandbyOferta;
 use App\Models\StandbyRegistro;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB; // <-- Agregar este use
+
 
 class StandbySelectorService
 {

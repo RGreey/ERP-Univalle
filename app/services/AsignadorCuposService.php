@@ -313,4 +313,102 @@ class AsignadorCuposService
 
         return $out;
     }
+    public function aplicarSemanaATodoPeriodo(ConvocatoriaSubsidio $conv, Carbon $lunes): int
+    {
+        if (!$conv->fecha_inicio_beneficio || !$conv->fecha_fin_beneficio) return 0;
+
+        // 1) Construir plantilla por día (ISO 1..5) y sede a partir de la semana base
+        $plantilla = [];
+        foreach ([1,2,3,4,5] as $dISO) {
+            $fecha = $lunes->copy()->addDays($dISO-1);
+            foreach (['caicedonia','sevilla'] as $sede) {
+                $uids = CupoAsignacion::whereHas('cupo', function($q) use ($conv, $fecha, $sede) {
+                        $q->where('convocatoria_id', $conv->id)
+                          ->whereDate('fecha', $fecha->toDateString())
+                          ->where('sede', $sede);
+                    })
+                    ->orderBy('created_at')
+                    ->pluck('user_id')
+                    ->all();
+                $plantilla[$dISO][$sede] = $uids;
+            }
+        }
+
+        // 2) Usuarios permitidos actualmente (tienen postulación vigente)
+        $permitidos = PostulacionSubsidio::where('convocatoria_id', $conv->id)
+            ->whereIn('estado', ['evaluada','beneficiario'])
+            ->pluck('user_id')
+            ->unique()
+            ->flip(); // map user_id => index
+
+        // 3) Asegurar estructura de cupos en todo el periodo
+        $this->generarPeriodo($conv);
+
+        $inicio = $lunes->copy()->addWeek(); // FUTURAS: desde la semana siguiente
+        $fin    = Carbon::parse($conv->fecha_fin_beneficio)->endOfWeek(Carbon::SUNDAY);
+
+        $totalCreadas = 0;
+
+        // Recorremos semana por semana
+        for ($semana = $inicio->copy(); $semana->lte($fin); $semana->addWeek()) {
+            DB::transaction(function () use ($conv, $semana, $plantilla, $permitidos, &$totalCreadas) {
+
+                foreach ([1,2,3,4,5] as $dISO) {
+                    $fecha = $semana->copy()->addDays($dISO-1);
+
+                    // Fuera de rango real de beneficio
+                    if ($fecha->lt(Carbon::parse($conv->fecha_inicio_beneficio)) ||
+                        $fecha->gt(Carbon::parse($conv->fecha_fin_beneficio))) {
+                        continue;
+                    }
+
+                    // Para evitar doble asignación el mismo día (cualquier sede)
+                    $asignadosDia = [];
+
+                    foreach (['caicedonia','sevilla'] as $sede) {
+                        $cap = ($sede==='caicedonia')
+                            ? (int)($conv->cupos_caicedonia ?? 0)
+                            : (int)($conv->cupos_sevilla ?? 0);
+
+                        // Cupo del día/sede
+                        $cupo = CupoDiario::firstOrCreate(
+                            ['convocatoria_id'=>$conv->id,'fecha'=>$fecha->toDateString(),'sede'=>$sede],
+                            ['capacidad'=>$cap,'asignados'=>0]
+                        );
+                        if ($cupo->capacidad !== $cap) { $cupo->capacidad = $cap; $cupo->save(); }
+
+                        // Borrar asignaciones existentes de ese día/sede y resetear contador
+                        CupoAsignacion::where('cupo_diario_id', $cupo->id)->delete();
+                        $cupo->asignados = 0;
+                        $cupo->save();
+
+                        $lista = (array)($plantilla[$dISO][$sede] ?? []);
+                        if (empty($lista)) continue;
+
+                        // Rellenar hasta capacidad, respetando usuarios permitidos y sin duplicar en el día
+                        foreach ($lista as $uid) {
+                            if ($cupo->asignados >= $cupo->capacidad) break;
+                            if (!isset($permitidos[$uid])) continue;
+                            if (in_array($uid, $asignadosDia, true)) continue;
+
+                            CupoAsignacion::create([
+                                'cupo_diario_id' => $cupo->id,
+                                'postulacion_id' => PostulacionSubsidio::where('convocatoria_id',$conv->id)->where('user_id',$uid)->value('id'),
+                                'user_id'        => $uid,
+                                'estado'         => 'asignado',
+                                'asignado_en'    => now(),
+                                'qr_token'       => bin2hex(random_bytes(16)),
+                            ]);
+                            $cupo->increment('asignados');
+                            $asignadosDia[] = $uid;
+                            $totalCreadas++;
+                        }
+                    }
+                }
+
+            });
+        }
+
+        return $totalCreadas;
+    }
 }

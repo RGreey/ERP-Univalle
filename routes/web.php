@@ -24,10 +24,11 @@ use App\Http\Controllers\PWA\SubsidioEstudianteController;
 use App\Http\Controllers\PWA\ReportesEstudianteController;
 use App\Http\Controllers\AdminReportesController;
 use App\Http\Controllers\PWA\Restaurantes\AsistenciasController;
-use App\Http\Controllers\PWA\Restaurantes\ReportesRestauranteController;
+use App\Http\Controllers\PWA\Restaurantes\ReportesRestaurantesController;
 use App\Http\Controllers\PWA\Restaurantes\RestaurantesDashboardController;
 use App\Http\Controllers\StandbyOfferController;
 use App\Http\Controllers\PWA\StandbyController;
+use App\Http\Controllers\AdminStandbyController;
 
 use Illuminate\Foundation\Auth\EmailVerificationRequest;
 use Illuminate\Http\Request;
@@ -750,8 +751,6 @@ Route::middleware(['auth', 'checkrole:AdminBienestar'])->prefix('admin')->as('ad
     // Reponer ofertas de cupos
     Route::post('/cupos/reponer-ofertas', [AdminCuposController::class, 'reponerOfertas'])->name('cupos.reponer-ofertas');
 
-
-
 });
 // AdminBienestar: gestionar restaurantes
 // AdminBienestar: gestionar restaurantes (CRUD sencillo)
@@ -763,6 +762,22 @@ Route::middleware(['auth','checkrole:AdminBienestar'])
     Route::delete('/{restaurante}/detach', [\App\Http\Controllers\AdminRestaurantesController::class, 'detachUser'])->name('detach');
     Route::delete('/{restaurante}', [\App\Http\Controllers\AdminRestaurantesController::class, 'destroy'])->name('destroy');
 });
+
+Route::middleware(['auth','checkrole:AdminBienestar'])
+    ->prefix('admin/standby')->as('admin.standby.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\AdminStandbyController::class, 'index'])->name('index');
+        Route::get('/create', [\App\Http\Controllers\AdminStandbyController::class,'create'])->name('create');
+        Route::post('/', [\App\Http\Controllers\AdminStandbyController::class,'store'])->name('store');
+        Route::get('/{registro}/edit', [\App\Http\Controllers\AdminStandbyController::class,'edit'])->name('edit');
+        Route::put('/{registro}', [\App\Http\Controllers\AdminStandbyController::class,'update'])->name('update');
+        Route::delete('/{registro}', [\App\Http\Controllers\AdminStandbyController::class,'destroy'])->name('destroy');
+        Route::patch('/{registro}/activo', [\App\Http\Controllers\AdminStandbyController::class,'toggleActivo'])->name('toggle-activo');
+        Route::post('/ofertas/claim/{cupo}', [\App\Http\Controllers\PWA\StandbyInboxController::class, 'claimCupo'])
+            ->name('ofertas.claim')
+            ->middleware('throttle:60,1');
+});
+
+
 
 Route::middleware(['auth','checkrole:Estudiante'])->group(function () {
     Route::get('/subsidio/convocatorias', [\App\Http\Controllers\EstudianteConvocatoriaController::class, 'index'])
@@ -810,6 +825,23 @@ Route::middleware(['auth','checkrole:Estudiante'])
         Route::get('/ping', fn() => 'ok')->name('ping');
     });
 
+Route::middleware(['auth','checkrole:Estudiante'])
+    ->prefix('/app/subsidio')
+    ->as('app.subsidio.')
+    ->group(function () {
+        Route::get('/ofertas', [\App\Http\Controllers\PWA\StandbyInboxController::class, 'index'])
+            ->name('ofertas.index');
+        Route::post('/ofertas/{oferta}/aceptar', [\App\Http\Controllers\PWA\StandbyInboxController::class, 'accept'])
+            ->name('ofertas.accept')
+            ->middleware('throttle:20,1');
+        Route::post('/ofertas/{oferta}/rechazar', [\App\Http\Controllers\PWA\StandbyInboxController::class, 'decline'])
+            ->name('ofertas.decline')
+            ->middleware('throttle:20,1');
+        Route::post('/ofertas/claim/{cupo}', [\App\Http\Controllers\PWA\StandbyInboxController::class, 'claimCupo'])
+            ->name('ofertas.claim')
+            ->middleware('throttle:60,1');
+    });
+
 // PWA RESTAURANTE
 // DIAGNÓSTICO TEMPORAL — BORRAR AL FINAL
 Route::get('/app/restaurantes', function () {
@@ -848,7 +880,19 @@ Route::middleware(['auth','checkrole:Restaurante'])
         Route::redirect('/app/restaurantes/', '/app/restaurantes', 301);
     });
     
-
+Route::middleware(['auth','checkrole:Restaurante'])
+    ->prefix('/app/restaurante')
+    ->as('app.restaurante.')
+    ->group(function () {
+        Route::get('/reportes', [\App\Http\Controllers\PWA\Restaurantes\ReportesRestaurantesController::class, 'index'])
+            ->name('reportes.index');
+        Route::get('/reportes/nuevo', [\App\Http\Controllers\PWA\Restaurantes\ReportesRestaurantesController::class, 'create'])
+            ->name('reportes.create');
+        Route::post('/reportes', [\App\Http\Controllers\PWA\Restaurantes\ReportesRestaurantesController::class, 'store'])
+            ->name('reportes.store');
+        Route::get('/reportes/{reporte}', [\App\Http\Controllers\PWA\Restaurantes\ReportesRestaurantesController::class, 'show'])
+            ->name('reportes.show');
+    });
 
 
 // DIAGNÓSTICO TEMPORAL — BORRAR AL FINAL

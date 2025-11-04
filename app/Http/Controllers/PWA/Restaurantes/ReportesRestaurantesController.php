@@ -1,13 +1,13 @@
 <?php
 
-namespace App\Http\Controllers\PWA\Restaurante;
+namespace App\Http\Controllers\PWA\Restaurantes;
 
 use App\Http\Controllers\Controller;
 use App\Models\ReporteSubsidio;
 use App\Models\User;
 use Illuminate\Http\Request;
 
-class ReportesRestauranteController extends Controller
+class ReportesRestaurantesController extends Controller
 {
     public function __construct()
     {
@@ -20,12 +20,12 @@ class ReportesRestauranteController extends Controller
             ->where('user_id', auth()->id()) // autor del reporte (restaurante)
             ->orderByDesc('created_at')->paginate(12);
 
-        return view('pwa.restaurante.reportes.index', compact('items'));
+        return view('pwa.restaurantes.reportes.index', compact('items'));
     }
 
     public function create()
     {
-        return view('pwa.restaurante.reportes.create');
+        return view('pwa.restaurantes.reportes.create');
     }
 
     public function store(Request $request)
@@ -61,6 +61,6 @@ class ReportesRestauranteController extends Controller
     public function show(ReporteSubsidio $reporte)
     {
         abort_unless($reporte->user_id === auth()->id(), 403);
-        return view('pwa.restaurante.reportes.show', compact('reporte'));
+        return view('pwa.restaurantes.reportes.show', compact('reporte'));
     }
 }

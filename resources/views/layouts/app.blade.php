@@ -86,6 +86,11 @@
                             Gestión del restaurante
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ route('app.restaurante.reportes.index') }}">
+                            Reportes / PQRs
+                        </a>
+                    </li>
                 @else
                     <li class="nav-item">
                         <a class="nav-link" href="{{ route('dashboard') }}">Inicio</a>
@@ -226,6 +231,17 @@
                                 <li>
                                     <a class="dropdown-item" href="{{ route('app.subsidio.reportes.index') }}">
                                         Reportes
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item d-flex align-items-center justify-content-between"
+                                    href="{{ route('app.subsidio.ofertas.index') }}">
+                                        Buzón de reemplazos
+                                        @isset($standbyInboxCount)
+                                            @if($standbyInboxCount > 0)
+                                                <span class="badge rounded-pill bg-info text-dark ms-2">{{ $standbyInboxCount }}</span>
+                                            @endif
+                                        @endisset
                                     </a>
                                 </li>
                             </ul>

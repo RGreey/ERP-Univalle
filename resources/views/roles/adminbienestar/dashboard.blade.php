@@ -178,7 +178,17 @@
             </li>
             <li><a href="{{ route('admin.restaurantes.index') }}">Restaurantes</a></li>
             <li><a href="{{ route('admin.asistencias.index') }}">Asistencias</a></li>
-            <li><a href="{{ route('admin.asistencias.cancelaciones') }}">Cancelaciones</a></li>
+            <li>
+                <a href="{{ route('admin.asistencias.cancelaciones') }}">
+                    Cancelaciones
+                    @isset($adminCancelacionesCount)
+                    @if($adminCancelacionesCount > 0)
+                        <span class="badge rounded-pill bg-danger ms-1">{{ $adminCancelacionesCount }}</span>
+                    @endif
+                    @endisset
+                </a>
+                </li>
+            <li><a href="{{ route('admin.standby.index') }}">Lista Standby</a></li>
             <li><a href="{{ \Illuminate\Support\Facades\Route::has('admin.reportes') ? route('admin.reportes') : '#' }}">PQR's</a></li>
         </ul>
     </aside>
